@@ -2,6 +2,34 @@
 
 ****
 
+## Work Allocations and TODO
+
+**Nilaksh**
+
+Immidiate:
+- [ ] Figure out humanoid-env
+- [ ] Implement PPO to try out single tasks
+      
+Future :
+- [ ] Implement multi-task framework for feasible single tasks
+
+**Satpaty**
+
+Immidiate:
+- [ ] ?
+      
+Future :
+- [ ] Implement encoder-decoder for observations
+
+**Viswesh**
+
+Immidiate:
+- [ ] ?
+      
+Future :
+- [ ] Try out multi-agent frameworks
+***
+
 ## Installation
 
 Download and extract the [Isaac Gym preview release](https://developer.nvidia.com/isaac-gym). Supported Python versions are 3.7 or 3.8. Next create a `conda` or `venv` virtual environment and launch it. 
