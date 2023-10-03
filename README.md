@@ -6,7 +6,7 @@
 
 ### Nilaksh
 
-Immidiate:
+Immediate:
 - [ ] Figure out humanoid-env
 - [ ] Implement PPO to try out single tasks
       
@@ -15,7 +15,7 @@ Future :
 
 ### Satpaty
 
-Immidiate:
+Immediate:
 - [ ] ?
       
 Future :
@@ -23,8 +23,9 @@ Future :
 
 ### Viswesh
 
-Immidiate:
-- [ ] ?
+Immediate:
+- [ ] Extend the environment to multi agent settings
+- [ ] Check ways to run multiple seeds parallely for MARL
       
 Future :
 - [ ] Try out multi-agent frameworks
