@@ -1,49 +1,32 @@
-# TimeChamber: A Massively Parallel Large Scale Self-Play Framework
+# Multi Agent And Task Reinforcement Learning
 
 ****
-
-**TimeChamber** is a large scale self-play framework running on parallel simulation.
-Running self-play algorithms always need lots of hardware resources, especially on 3D physically simulated
-environments.
-We provide a self-play framework that can achieve fast training and evaluation with **ONLY ONE GPU**.
-TimeChamber is developed with the following key features:
-
-- **Parallel Simulation**: TimeChamber is built within [Isaac Gym](https://developer.nvidia.com/isaac-gym). Isaac Gym is
-  a fast GPU-based simulation platform. It supports running thousands of environments in parallel on a single GPU.For
-  example, on one NVIDIA Laptop RTX 3070Ti GPU, TimeChamber can reach **80,000+
-  mean FPS** by running 4,096 environments in parallel.
-- **Parallel Evaluation**: TimeChamber can fast calculate dozens of policies' ELO
-  rating(represent their combat power). It also supports multi-player ELO calculations
-  by [multi-elo](https://github.com/djcunningham0/multielo). Inspired by Vectorization techniques
-  for [fast population-based training](https://github.com/instadeepai/fastpbrl), we leverage the
-  vectorized models to evaluate different policy in parallel.
-- **Prioritized Fictitious Self-Play Benchmark**: We implement a classic PPO self-play algorithm on top
-  of [rl_games](https://github.com/Denys88/rl_games), with a prioritized player pool to avoid cycles and improve the
-  diversity of training policy.
-
-<div align=center>
-<img src="assets/images/algorithm.jpg" align="center" width="600"/>
-</div> 
-
-- **Competitive Multi-Agent Tasks**: Inspired by [OpenAI RoboSumo](https://github.com/openai/robosumo) and [ASE](https://github.com/nv-tlabs/ASE), we introduce three
-  competitive multi-agent tasks(e.g.,Ant Sumo,Ant
-  Battle and Humanoid Strike) as examples.
-  The efficiency of our self-play framework has been tested on these tasks. After days of training,our agent can
-  discover some interesting
-  physical skills like pulling, jumping,etc. **Welcome to contribute your own environments!**
-
 
 ## Installation
 
 ****
-Download and follow the installation instructions of Isaac Gym: https://developer.nvidia.com/isaac-gym  
+
+Download and extract the [Isaac Gym preview release](https://developer.nvidia.com/isaac-gym). Supported Python versions are 3.7 or 3.8. Next create a `conda` or `venv` virtual environment and launch it. 
+
+```
+python3 -m venv rl-env
+source rl-env/bin/activate
+```
+
+In the `python` subdirectory of the extracted folder, run:
+
+```
+pip install -e .
+```
+
+This will install the `isaacgym` package and all of its dependencies in the active Python environment. 
 Ensure that Isaac Gym works on your system by running one of the examples from the `python/examples`
 directory, like `joint_monkey.py`. If you have any trouble running the samples, please follow troubleshooting steps
 described in the [Isaac Gym Preview Release 3/4 installation instructions](https://developer.nvidia.com/isaac-gym).  
 Then install this repo:
 
 ```bash
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ## Quick Start
@@ -190,16 +173,8 @@ for _ in range(20):
 
 ```
 
-## Citing
 
-If you use timechamber in your research please use the following citation:
+## Credits
 
-````
-@misc{InspirAI,
-  author = {Huang Ziming, Ziyi Liu, Wu Yutong, Flood Sung},
-  title = {TimeChamber: A Massively Parallel Large Scale Self-Play Framework},
-  year = {2022},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/inspirai/TimeChamber}},
-}
+- [TimeChamber](https://github.com/inspirai/TimeChamber)
+- [IsaacGymEnvs](https://github.com/NVIDIA-Omniverse/IsaacGymEnvs)
