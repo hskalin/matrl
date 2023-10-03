@@ -2,6 +2,10 @@
 
 We provide a detailed description of the environment here.
 
+### Initialization
+
+`create_rlgpu_env()` in [rlgames_utils.py](https://github.com/hskalin/matrl/blob/main/timechamber/utils/rlgames_utils.py) parses the configuration parameters for the environment task and creates a VecTask. This is called by `make` in [\_\_init\_\_.py](https://github.com/hskalin/matrl/blob/main/timechamber/__init__.py).
+
 ### Humanoid Strike
 
 Humanoid Strike is a 3D environment with two simulated humanoid physics characters. Each character is equipped with a sword and shield with 37 degrees-of-freedom.
