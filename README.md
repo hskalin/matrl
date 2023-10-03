@@ -4,7 +4,7 @@
 
 ## Work Allocations and TODO
 
-**Nilaksh**
+### Nilaksh
 
 Immidiate:
 - [ ] Figure out humanoid-env
@@ -13,7 +13,7 @@ Immidiate:
 Future :
 - [ ] Implement multi-task framework for feasible single tasks
 
-**Satpaty**
+### Satpaty
 
 Immidiate:
 - [ ] ?
@@ -21,7 +21,7 @@ Immidiate:
 Future :
 - [ ] Implement encoder-decoder for observations
 
-**Viswesh**
+### Viswesh
 
 Immidiate:
 - [ ] ?
