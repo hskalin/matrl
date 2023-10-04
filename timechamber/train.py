@@ -32,11 +32,16 @@ import datetime
 from statistics import mode
 import isaacgym
 import os
+import sys
 import hydra
 import yaml
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import to_absolute_path
 import gym
+
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 
 from timechamber.utils.reformat import omegaconf_to_dict, print_dict
 from timechamber.utils.utils import set_np_formatting, set_seed
