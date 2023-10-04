@@ -36,7 +36,7 @@ Future :
 Download and extract the [Isaac Gym preview release](https://developer.nvidia.com/isaac-gym). Supported Python versions are 3.7 or 3.8. Next create a `conda` or `venv` virtual environment and launch it. 
 
 ```
-python3 -m venv rl-env
+python3.8 -m venv rl-env
 source rl-env/bin/activate
 ```
 
