@@ -16,10 +16,10 @@ Future :
 ### Satpaty
 
 Immediate:
-- [ ] ?
+- [ ] Integrate Dreamer V3 in Time Chamber
       
 Future :
-- [ ] Implement encoder-decoder for observations
+- [ ] Implement MWM for proprio
 
 ### Viswesh
 
