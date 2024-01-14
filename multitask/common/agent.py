@@ -62,19 +62,7 @@ class IsaacAgent(AbstractAgent):
         self.feature_shape = [self.feature_dim]
         self.action_shape = [self.action_dim]
 
-        if self.buffer_cfg["prioritized_replay"]:
-            self.replay_buffer = VecPrioritizedReplayBuffer(
-                device=self.device,
-                **self.buffer_cfg,
-            )
-        else:
-            self.replay_buffer = VectorizedReplayBuffer(
-                self.observation_shape,
-                self.action_shape,
-                self.feature_shape,
-                device=self.device,
-                **self.buffer_cfg,
-            )
+        self.setup_replaybuffer()
         self.mini_batch_size = int(self.buffer_cfg["mini_batch_size"])
         self.min_n_experience = int(self.buffer_cfg["min_n_experience"])
 
@@ -104,6 +92,21 @@ class IsaacAgent(AbstractAgent):
         self.game_rewards = AverageMeter(1, self.games_to_track).to(self.device)
         self.game_lengths = AverageMeter(1, self.games_to_track).to(self.device)
         self.avgStepRew = AverageMeter(1, 20).to(self.device)
+
+    def setup_replaybuffer(self):
+        if self.buffer_cfg["prioritized_replay"]:
+            self.replay_buffer = VecPrioritizedReplayBuffer(
+                device=self.device,
+                **self.buffer_cfg,
+            )
+        else:
+            self.replay_buffer = VectorizedReplayBuffer(
+                self.observation_shape,
+                self.action_shape,
+                self.feature_shape,
+                device=self.device,
+                **self.buffer_cfg,
+            )
 
     def run(self):
         while True:
@@ -319,9 +322,6 @@ class MultitaskAgent(IsaacAgent):
         returns, episode_r = super().evaluate()
         task_return = self.task.evalTaskR(episode_r)
 
-        print("returns:", returns)
-        print("task returns:", task_return)
-
         print(f"===== finish evaluate ====")
 
         wandb.log({f"reward/phase{phase}_eval": torch.mean(returns).item()})
@@ -352,3 +352,15 @@ class MultitaskAgent(IsaacAgent):
             elif mode == "exploit":
                 a = self.exploit(s, w, id)
         return a
+
+    def setup_replaybuffer(self):
+        super().setup_replaybuffer()
+
+        if self.buffer_cfg["framestacked_replay"]:
+            self.replay_buffer = FrameStackedReplayBuffer(
+                obs_shape=self.observation_shape,
+                action_shape=self.action_shape,
+                feature_shape=self.feature_shape,
+                device=self.device,
+                **self.buffer_cfg,
+            )

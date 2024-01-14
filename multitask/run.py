@@ -10,7 +10,6 @@ import numpy as np
 
 import wandb
 
-
 def get_agent(cfg_dict):
     if "sac" in cfg_dict["agent"]["name"].lower():
         from agents.sac import SACAgent
@@ -43,7 +42,6 @@ def get_agent(cfg_dict):
         agent = RMACompAgent(cfg_dict)
 
     return agent
-
 
 @hydra.main(config_name="config", config_path="./cfg")
 def launch_rlg_hydra(cfg: DictConfig):

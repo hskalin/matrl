@@ -42,11 +42,10 @@
 env_name: "BlimpRand"
 num_envs: 1024
 
-episode_max_step: 500
-total_episodes: 300
+episode_max_step: 1000
+total_episodes: 70
 
 mode: "train" # train or test
-gazebo: False
 
 eval: True
 eval_interval: 5
@@ -57,11 +56,11 @@ log_path: "logs/"  # config, video, model log path
 log_interval: 5 # wandb log
 
 blimp:
-  spawn_height: 20
-  reset_dist: 35
+  spawn_height: 15
+  reset_dist: 70
 
   mass: 8.907
-  ema_smooth: [0.2, 0.3] # [thrust, stick]
+  ema_smooth: [0.3, 0.5] # [thrust, stick]
   # indices of blimp bodies for which aerodynamics is calculated
   drag_body_idxs: [0, 7, 8, 9, 10, 11, 12, 13, 14]
   # approx (x,y,z) components of area for the above bodies (in m^2)
@@ -87,55 +86,47 @@ blimp:
 
 aero:
   wind_dirs: [1.0, 1.0, 0.25]
-  wind_mag: 1.5
-  wind_std: 0.05
+  wind_mag: 1
+  wind_std: 0.3
 
 goal: 
-  type: "rand" # rand, fix
+  type: "fix" # rand, fix
 
-  pos_lim: 20.0
-  vel_lim: 4.0
+  pos_lim: 30
+  vel_lim: 5
   avel_lim: 0.5
+  min_z: 5
 
-  # fix goal
-  style: "hourglass" # square, hourglass, circle
-
-  # rand goal
-  kWayPt: 3
+  # position trajectory
+  kWayPt: 4
   wp_dist: 15
   trigger_dist: 5
-  min_z: 10
-  max_z: 30
-
-  rand_pos_targets: True
-  rand_ang_targets: True
-  rand_vel_targets: True
-  rand_avel_targets: False
 
   # targets for play
   target_pos:     [0, 0, 20] # x, y, z
   target_vel:     [0, 0, 0] # vx, vy, vz
-  target_velnorm: 2 # [m/s]
   target_ang:     [0, 0, 0] # rpy
   target_angvel:  [0, 0, 0] # wx, wy, wz
+  
+  rand_pos_targets: True
+  rand_ang_targets: True
+  rand_vel_targets: True
+  rand_avel_targets: True
 
 task:
   verbose: False
 
-  rand_task: True # fix training task weight
+  rand_task: True # fix train task or not
+  domain_rand: True # randomize env latent
   init_vel: True
   
-  domain_rand: True # randomize env latent
-  range_a: [0.8, 1.25] # type a var range
-  range_b: [0.5, 2.0] # type b var range
-
   # proximity reward
-  proximity_threshold: 7 # [m]
+  proximity_threshold: 5 # [m]
 
   # specify initial task weight
-  taskLabels:  ['planar','Z','trigger','heading',  'proximity','yaw','vnorm',   'vxy','vz',  'bndcost','regRP','regT']
-  task_wTrain: [1,.5,1,.1, 0,0,0, 0,0, 0,0,0]
-  task_wEval:  [0,0,0,0, 1,0,0, 0,0, 0,0,0]
+  taskLabels:  ['planar', 'Z', 'trigger', 'yaw2goal', 'proximity', 'yaw','vnorm',  'vx', 'vy', 'vz', 'regPR', 'regThrust']
+  task_wTrain: [1,.5,1,.1, 0,0,0, 0,0,0, 0,0]
+  task_wEval:  [0,0,0,0, 1,.5,0, 0,0,0, 0,0]
 
   # can be "uniform", "permute", "identity", "achievable", "single", "redundant"
   taskSet_train: "achievable"
@@ -145,48 +136,45 @@ task:
   # set of task weights
   taskSet: 
     navigation: [
-      [0,0,1,0, 0,0,0, 0,0, 0,0,0],
-      [1,.5,1,.1, 0,0,0, 0,0, 0,0,0],
-      [1,.5,1,0, 0,0,0, 0,0, 0,0,0],
-      [1,.5,1,.5, 0,0,1, 0,0, 0,0,0],
+      [0,0,1,0, 0,0,0, 0,0,0, 0,0],
+      [1,.5,1,.1, 0,0,0, 0,0,0, 0,0],
+      [1,.5,1,0, 0,0,0, 0,0,0, 0,0],
+      [1,.5,1,.5, 0,0,1, 0,0,0, 0,0],
     ]
 
     hover: [
-      [0,0,0,0, 1,.5,0, 0,0, 0,0,.1],
-      [0,0,0,0, 1,0,.5, 0,0, 0,.1,0],
+      [0,0,0,0, 1,1,0, 0,0,0, 0,.1],
+      [0,0,0,0, 1,0,1, 0,0,0, .1,0],
     ]
 
     path_follow: [
-      [0,0,0,0, 0,0,0, 1,1, 0,0,0],
-      [0,0,0,0, 0,0,0, 1,1, 0,.3,0],
+      [0,0,0,0, 0,0,0, 1,1,1, 0,0],
+      [0,0,0,0, 0,0,0, 1,1,1, .3,0],
     ]
 
     achievable:   [
       # controller
-      [.01,0,10,0, 0,0,0, 0,0, 0,.01,0],
-      [0,0,0,0, 10,0,0, 0,0, .2,0,.1],
-      [0,0,10,0, 0,0,0, .1,.1, 0,.01,0],
+      [1,.8,1,.5, 0,0,1, 0,0,0, .1,0],
+      [0,0,0,0, 1,0,0, 0,0,0, .1,.1],
+      [0,0,0,0, 0,0,0, 1,1,1, 0,0],
 
       # navigation
-      [0,.5,.1,1, 0,0,1, 0,0, 0,.01,.01],
+      [0,0,1,0, 0,0,0, 0,0,0, 0,0],
+      [1,.5,1,0, 0,0,0, 0,0,0, 0,0],
+      [1,.5,.5,.5, 0,0,1, 0,0,0, .1,0],
       # hover
-      [0,0,0,0, 10,.2,0, 0,0, .1,0,.2],
-      # path follow
-      [0,0,0,.1, 0,0,0, 1,1, 0,.01,0],
-
-      # others
-      [0,0,0,1, 0,0,0, .2,0, 0,0,0],
-      [1,.1,0,.1, 0,0,.1, 0,0, 0,0,0],
+      [0,0,0,0, 1,0,0, 0,0,0, 0,0],
+      [0,0,0,0, 1,1,0, 0,0,0, 0,.1],
+      [0,0,0,0, 1,0,1, 0,0,0, .1,0],
+      # # # path follow
+      [0,0,0,0, 0,0,0, 1,1,1, 0,0],
+      [0,0,0,0, 0,0,0, 1,1,1, .1,0],
       ]
 
     single: [[0,0,0,0, 0,0,0, 1,1,1, 0,0,0,0]]
 
 feature: 
   verbose: False
-
-  scale_pos: 20
-  scale_prox: 10
-  scale_ang: 40
 
   
 sim:

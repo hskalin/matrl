@@ -1,4 +1,4 @@
-# import isaacgym
+import isaacgym
 
 import torch
 import torch.nn as nn
@@ -10,6 +10,7 @@ from pathlib import Path
 par = Path().resolve().parent
 sys.path.append(str(par))
 
+from env.wrapper.multiTask import multitaskenv_constructor
 
 import hydra
 import wandb
@@ -224,8 +225,6 @@ class Perception:
         )
 
     def _init_env(self):
-        from env.wrapper.multiTask import multitaskenv_constructor
-
         self.num_envs = self.cfg["env"]["num_envs"]
         self.device = self.cfg["rl_device"]
         self.env, _, _ = multitaskenv_constructor(self.cfg["env"], device=self.device)

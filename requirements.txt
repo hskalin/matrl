@@ -12,5 +12,37 @@ matplotlib==3.5.2
 pytest==7.1.2
 wandb
 rltorch
+torchrl
+tensordict
 tensorboard
 opencv-python
+
+# Requirement already satisfied: torchrl in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (0.2.0)
+# Requirement already satisfied: torch in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torchrl) (2.0.1)
+# Requirement already satisfied: numpy in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torchrl) (1.20.3)
+# Requirement already satisfied: packaging in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torchrl) (23.2)
+# Requirement already satisfied: cloudpickle in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torchrl) (2.2.1)
+# Requirement already satisfied: tensordict>=0.2.0 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torchrl) (0.2.1)
+# Requirement already satisfied: filelock in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (3.12.4)
+# Requirement already satisfied: typing-extensions in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (4.8.0)
+# Requirement already satisfied: sympy in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (1.12)
+# Requirement already satisfied: networkx in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (3.1)
+# Requirement already satisfied: jinja2 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (3.1.2)
+# Requirement already satisfied: nvidia-cuda-nvrtc-cu11==11.7.99 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.7.99)
+# Requirement already satisfied: nvidia-cuda-runtime-cu11==11.7.99 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.7.99)
+# Requirement already satisfied: nvidia-cuda-cupti-cu11==11.7.101 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.7.101)
+# Requirement already satisfied: nvidia-cudnn-cu11==8.5.0.96 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (8.5.0.96)
+# Requirement already satisfied: nvidia-cublas-cu11==11.10.3.66 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.10.3.66)
+# Requirement already satisfied: nvidia-cufft-cu11==10.9.0.58 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (10.9.0.58)
+# Requirement already satisfied: nvidia-curand-cu11==10.2.10.91 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (10.2.10.91)
+# Requirement already satisfied: nvidia-cusolver-cu11==11.4.0.1 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.4.0.1)
+# Requirement already satisfied: nvidia-cusparse-cu11==11.7.4.91 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.7.4.91)
+# Requirement already satisfied: nvidia-nccl-cu11==2.14.3 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (2.14.3)
+# Requirement already satisfied: nvidia-nvtx-cu11==11.7.91 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (11.7.91)
+# Requirement already satisfied: triton==2.0.0 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from torch->torchrl) (2.0.0)
+# Requirement already satisfied: setuptools in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from nvidia-cublas-cu11==11.10.3.66->torch->torchrl) (56.0.0)
+# Requirement already satisfied: wheel in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from nvidia-cublas-cu11==11.10.3.66->torch->torchrl) (0.41.2)
+# Requirement already satisfied: cmake in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from triton==2.0.0->torch->torchrl) (3.27.6)
+# Requirement already satisfied: lit in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from triton==2.0.0->torch->torchrl) (17.0.2)
+# Requirement already satisfied: MarkupSafe>=2.0 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from jinja2->torch->torchrl) (2.1.3)
+# Requirement already satisfied: mpmath>=0.19 in /home/nilaksh/rl/btp/rl-env/lib/python3.8/site-packages (from sympy->torch->torchrl) (1.3.0)

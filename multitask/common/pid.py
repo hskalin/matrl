@@ -55,7 +55,7 @@ class BlimpPositionControl:
         },
         "vel": {
             "pid_param": torch.tensor([0.7, 0.01, 0.5]),
-            "gain": 0.001,
+            "gain": 1.0,
         },
     }
 
@@ -148,7 +148,7 @@ class BlimpHoverControl(BlimpPositionControl):
         },
         "vel": {
             "pid_param": torch.tensor([0.7, 0.01, 0.5]),
-            "gain": 0.005,
+            "gain": 1.0,
         },
     }
 

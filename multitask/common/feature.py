@@ -202,7 +202,7 @@ class PointerFeature(FeatureAbstract):
             featureAngVelNorm = self.compute_featureAngVelNorm(errorAngVel)
             features.append(featureAngVelNorm)
 
-        return torch.concat(features, 1)
+        return torch.concatenate(features, 1)
 
     def compute_featureProx(self, errorPos, scale=25):
         d = torch.norm(errorPos, dim=1, keepdim=True) ** 2
@@ -235,10 +235,6 @@ class BlimpFeature(FeatureAbstract):
         self.feature_cfg = self.env_cfg["feature"]
         self.device = device
 
-        self.scalePos = self.feature_cfg.get("scale_pos", 20)
-        self.scaleProx = self.feature_cfg.get("scale_prox", 20)
-        self.scaleAng = self.feature_cfg.get("scale_ang", 50)
-
         self.verbose = self.feature_cfg.get("verbose", False)
 
         self.Kp = torch.tensor(
@@ -247,32 +243,22 @@ class BlimpFeature(FeatureAbstract):
         self.Kv = torch.tensor(
             self.env_cfg["goal"]["vel_lim"], dtype=torch.float64, device=device
         )
-        self.reset_dist = torch.tensor(
-            self.env_cfg["blimp"]["reset_dist"],
-            dtype=torch.float64,
-            device=device,
-        ) 
         self.ProxThresh = torch.tensor(
             self.env_cfg["task"]["proximity_threshold"],
             dtype=torch.float64,
             device=device,
-        ) 
-        self.TriggerThresh = torch.tensor(
-            self.env_cfg["goal"].get("trigger_dist", 4), 
-            dtype=torch.float64,
-            device=device,
-        ) 
+        )
+        self.trigger_dist = torch.tensor(
+            self.env_cfg["goal"].get("trigger_dist", 2)
+        ).to(self.device)
         self.Ka = torch.pi
 
         self.dim = 12
         if self.verbose:
             print("[Feature] dim", self.dim)
 
-        self.proxScaleNav = 1 / self.compute_gaussDist(
-            mu=self.TriggerThresh[None, None], sigma=self.Kp, scale=self.scaleProx
-        ) #
-        self.proxScaleHov = 1 / self.compute_gaussDist(
-            mu=self.ProxThresh[None, None], sigma=self.Kp, scale=self.scaleProx
+        self.proxScale = 1 / self.compute_gaussDist(
+            mu=self.ProxThresh[None, None], sigma=self.Kp, scale=25
         )
 
         # robot angle
@@ -298,19 +284,18 @@ class BlimpFeature(FeatureAbstract):
 
         # goal vel
         self.slice_goal_v = slice(17, 17 + 3)
-        self.slice_goal_vnorm = slice(20, 20 + 1)
 
         # robot ang vel
-        self.slice_rb_angvel = slice(21, 21 + 3)
+        self.slice_rb_angvel = slice(20, 20 + 3)
 
         # goal ang vel
-        self.slice_goal_angvel = slice(24, 24 + 3)
+        self.slice_goal_angvel = slice(23, 23 + 3)
 
         # robot thrust
-        self.slice_actuators = slice(27, 27 + 1)
+        self.slice_actuators = slice(26, 26 + 1)
 
         # robot actions
-        self.slice_prev_act = slice(30, 30 + 3)
+        self.slice_prev_act = slice(28, 28 + 3)
 
     def extract(self, s):
         features = []
@@ -329,7 +314,9 @@ class BlimpFeature(FeatureAbstract):
             robot_v[:, 1],
             robot_v[:, 2],
         )
+
         goal_ang = s[:, self.slice_goal_angle]
+        goal_v = s[:, self.slice_goal_v]
         # goal_angVel = s[:, self.slice_goal_angvel]
         # goal_trigger = s[:, self.slice_goal_trigger]
 
@@ -338,31 +325,31 @@ class BlimpFeature(FeatureAbstract):
         error_posNav = s[:, self.slice_err_posNav]
         # error_posHov = s[:, self.slice_err_posHov]
         error_v = s[:, self.slice_rb_v] - s[:, self.slice_goal_v]
-        error_vnorm = robot_headingV - s[:, self.slice_goal_vnorm]
-        # print(robot_headingV)
         # error_angVel = robot_angVel - goal_angVel
+
         error_navHeading = check_angle(
             compute_heading(yaw=robot_angle[:, 2:3], rel_pos=error_posNav)
         )
+        error_vnorm = robot_headingV - torch.norm(goal_v[:, 0:2], dim=1, keepdim=True)
 
         # Nav planar:
-        x = self.compute_featureProx(error_posNav[:, 0:2], self.proxScaleNav, self.TriggerThresh, scale=self.scaleProx)
+        x = self.compute_featurePosNorm(error_posNav[:, 0:2])
         features.append(x)
 
         # Nav z:
-        x = self.compute_featurePosNorm(error_posNav[:, 2:3], scale=self.scalePos)
+        x = self.compute_featurePosNorm(error_posNav[:, 2:3])
         features.append(x)
 
         # Nav trigger:
-        x = s[:, self.slice_goal_trigger]
+        x = 10000.0 * s[:, self.slice_goal_trigger]
         features.append(x)
 
-        # Nav heading:
-        x = self.compute_featureAngNorm(error_navHeading, scale=self.scaleAng)
+        # Nav yaw_to_goal:
+        x = self.compute_featureAngNorm(error_navHeading)
         features.append(x)
 
         # Hov proxDist:
-        x = self.compute_featureProx(s[:, self.slice_err_posHov], self.proxScaleHov, self.ProxThresh, scale=self.scaleProx)
+        x = self.compute_featureProx(s[:, self.slice_err_posHov])
         features.append(x)
 
         # Hov yaw:
@@ -373,20 +360,19 @@ class BlimpFeature(FeatureAbstract):
         x = self.compute_featureVelNorm(error_vnorm)
         features.append(x)
 
-        # vxy:
-        x = self.compute_featureVelNorm(error_v[:, 0:2])
+        # vx:
+        x = self.compute_featureVelNorm(error_v[:, 0:1])
+        features.append(x)
+
+        # vy:
+        x = self.compute_featureVelNorm(error_v[:, 1:2])
         features.append(x)
 
         # vz:
         x = self.compute_featureVelNorm(error_v[:, 2:3])
         features.append(x)
 
-        # boundary cost:
-        dist_to_center = torch.norm(s[:, self.slice_err_posHov], dim=1, keepdim=True)
-        x = -self.compute_featurePosNorm(self.reset_dist - dist_to_center, scale=self.scalePos)
-        features.append(x)
-
-        # regulate roll and pitch:
+        # regulate row and pitch:
         x = self.compute_featureAngNorm(robot_angle[:, 0:2])
         features.append(x)
 
@@ -394,21 +380,21 @@ class BlimpFeature(FeatureAbstract):
         x = self.compute_featureAngNorm(robot_thrust + 1)
         features.append(x)
 
-        f = torch.concat(features, 1)
+        f = torch.concatenate(features, 1)
         if self.verbose:
             print(
-                "[Feature] features [planar, Z, trigger, yaw2goal, proximity, yaw, vnorm, vxy, vz,  bndcost, regRP, regthurst]"
+                "[Feature] features [planar, Z, trigger, yaw2goal, proximity, yaw, vnorm, vx, vy, vz,  regRP, regThrust]"
             )
             print(f)
         return f
 
-    def compute_featurePosNorm(self, x, scale=20):
+    def compute_featurePosNorm(self, x, scale=25):
         return self.compute_gaussDist(x, self.Kp, scale)
 
-    def compute_featureProx(self, x, proxScale, threshold, scale=20):
-        d = torch.norm(x, dim=1, keepdim=True) 
-        prox = proxScale * torch.exp(scale * -d** 2 / self.Kp**2)
-        return torch.clip(torch.where(d > threshold, prox, 1.0), 0.0, 1.0)
+    def compute_featureProx(self, x, scale=25):
+        d = torch.norm(x, dim=1, keepdim=True) ** 2
+        prox = self.proxScale * torch.exp(scale * -d / self.Kp**2)
+        return torch.where(d > self.ProxThresh, prox, 1)
 
     def compute_featureVelNorm(self, x, scale=30):
         return self.compute_gaussDist(x, self.Kv, scale)
