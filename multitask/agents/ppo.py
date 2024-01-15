@@ -6,7 +6,6 @@ import time
 from distutils.util import strtobool
 from env.wrapper.multiTask import multitaskenv_constructor
 from common.util import AverageMeter
-from common.feature_extractor import TCN, Perception
 
 import gym
 import wandb
@@ -63,45 +62,6 @@ class Agent(nn.Module):
             self.critic(x),
         )
 
-class TCNAgent(Agent):
-    def __init__(self, env):
-        super().__init__(env)
-
-        channels = [env.num_obs, env.num_obs]
-        kernel_size = 2
-        self.tcn1 = TCN(
-            in_dim = env.num_obs,
-            out_dim = env.num_obs,
-            num_channels=channels,
-            kernel_size=kernel_size,
-        )
-        self.tcn2 = TCN(
-            in_dim = env.num_obs,
-            out_dim = env.num_obs,
-            num_channels=channels,
-            kernel_size=kernel_size,
-        )
-
-    def get_value(self, x):
-        x1 = self.tcn1(x)
-        return self.critic(x1)
-
-    def get_action_and_value(self, x, action=None):
-        x1 = self.tcn1(x)
-        x2 = self.tcn2(x)
-        action_mean = self.actor_mean(x2)
-        action_logstd = self.actor_logstd.expand_as(action_mean)
-        action_std = torch.exp(action_logstd)
-        probs = Normal(action_mean, action_std)
-        if action is None:
-            action = probs.sample()
-        return (
-            action,
-            probs.log_prob(action).sum(1),
-            probs.entropy().sum(1),
-            self.critic(x1),
-        )
-
 
 class PPO_agent:
     def __init__(self, cfg):
@@ -109,9 +69,6 @@ class PPO_agent:
         self.env_cfg = cfg["env"]
         self.agent_cfg = cfg["agent"]
         self.buffer_cfg = cfg["buffer"]
-
-        self.num_envs = self.env_cfg["num_envs"]
-        self.num_steps = self.agent_cfg["num_steps"]
 
         self.agent_cfg["batch_size"] = int(
             self.env_cfg["num_envs"] * self.agent_cfg["num_steps"]
@@ -130,15 +87,13 @@ class PPO_agent:
 
         self.writer = SummaryWriter(f"runs/{self.run_name}")
 
-        #self.agent = Agent(self.env).to(self.device)
-        self.history = 5
-        self.agent = TCNAgent(self.env).to(self.device)
+        self.agent = Agent(self.env).to(self.device)
         self.optimizer = optim.Adam(
             self.agent.parameters(), lr=self.agent_cfg["learning_rate"], eps=1e-5
         )
-        
-        self.game_rewards = AverageMeter(1, max_size=100).to(self.device)
-        self.game_lengths = AverageMeter(1, max_size=100).to(self.device)
+
+        self.game_rewards = AverageMeter(1, max_size=100).to("cuda:0")
+        self.game_lengths = AverageMeter(1, max_size=100).to("cuda:0")
 
         self._init_buffers()
         ###
@@ -198,12 +153,10 @@ class PPO_agent:
                 self.obs[step] = next_obs
                 self.dones[step] = next_done
 
-                prev_idx = max(0, step - self.history)
                 # ALGO LOGIC: action logic
                 with torch.no_grad():
                     action, logprob, _, value = self.agent.get_action_and_value(
-                        #next_obs.unsqueeze(-1)
-                        self.obs.permute(1,2,0)[...,prev_idx:step+1]
+                        next_obs
                     )
                     self.values[step] = value.flatten()
                 self.actions[step] = action
@@ -253,10 +206,7 @@ class PPO_agent:
 
             # bootstrap value if not done
             with torch.no_grad():
-                next_value = self.agent.get_value(
-                    #next_obs.unsqueeze(-1)
-                    self.obs.permute(1,2,0)[...,-self.history:]
-                    ).reshape(1, -1)
+                next_value = self.agent.get_value(next_obs).reshape(1, -1)
                 advantages = torch.zeros_like(self.rewards).to(self.device)
                 lastgaelam = 0
                 for t in reversed(range(self.agent_cfg["num_steps"])):
@@ -281,26 +231,18 @@ class PPO_agent:
                 returns = advantages + self.values
 
             # flatten the batch
-            #b_obs = self.obs.reshape((-1, self.env.num_obs))
-            unfold_obs = self.obs.permute(1,2,0).unfold(2,self.history,1)
-
-            n_batch = self.num_envs*(self.num_steps - self.history+1)
-            b_obs = unfold_obs.permute(0,2,1,3).reshape(
-                n_batch, self.env.num_obs, self.history) # [Nenv*(S-H+1), O, H]
-            b_logprobs = self.logprobs.reshape(-1)[-n_batch:]
-            b_actions = self.actions.reshape((-1, self.env.num_act))[-n_batch:]
-            b_advantages = advantages.reshape(-1)[-n_batch:]
-            b_returns = returns.reshape(-1)[-n_batch:]
-            b_values = self.values.reshape(-1)[-n_batch:]
+            b_obs = self.obs.reshape((-1, self.env.num_obs))
+            b_logprobs = self.logprobs.reshape(-1)
+            b_actions = self.actions.reshape((-1, self.env.num_act))
+            b_advantages = advantages.reshape(-1)
+            b_returns = returns.reshape(-1)
+            b_values = self.values.reshape(-1)
 
             # Optimizing the policy and value network
             clipfracs = []
             for epoch in range(self.agent_cfg["update_epochs"]):
-                # b_inds = torch.randperm(
-                #     self.agent_cfg["batch_size"], device=self.device
-                # )
                 b_inds = torch.randperm(
-                    self.num_envs*(self.num_steps - self.history+1), device=self.device
+                    self.agent_cfg["batch_size"], device=self.device
                 )
                 for start in range(
                     0, self.agent_cfg["batch_size"], self.agent_cfg["minibatch_size"]
@@ -403,7 +345,6 @@ class PPO_agent:
             )
 
             wandb.log(wandb_metrics)
-
 
         # envs.close()
         self.writer.close()
