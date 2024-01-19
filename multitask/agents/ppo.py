@@ -1,13 +1,9 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_action_isaacgympy
-import argparse
-import os
-import random
 import time
 from distutils.util import strtobool
 from env.wrapper.multiTask import multitaskenv_constructor
-from common.util import AverageMeter
+from common.util import AverageMeter, dump_cfg
 
-import gym
 import wandb
 
 from env import env_map
@@ -18,6 +14,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.normal import Normal
 from torch.utils.tensorboard import SummaryWriter
+import datetime
+
+import pathlib
+import omegaconf
+
+EXP_DATETIME = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -30,18 +32,18 @@ class Agent(nn.Module):
     def __init__(self, env):
         super().__init__()
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(env.num_obs, 400)),
+            layer_init(nn.Linear(env.num_obs, 250)),
             nn.Tanh(),
-            layer_init(nn.Linear(400, 400)),
+            layer_init(nn.Linear(250, 250)),
             nn.Tanh(),
-            layer_init(nn.Linear(400, 1), std=1.0),
+            layer_init(nn.Linear(250, 1), std=1.0),
         )
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(env.num_obs, 400)),
+            layer_init(nn.Linear(env.num_obs, 250)),
             nn.Tanh(),
-            layer_init(nn.Linear(400, 400)),
+            layer_init(nn.Linear(250, 250)),
             nn.Tanh(),
-            layer_init(nn.Linear(400, env.num_act), std=0.01),
+            layer_init(nn.Linear(250, env.num_act), std=0.01),
         )
         self.actor_logstd = nn.Parameter(torch.zeros(1, env.num_act))
 
@@ -79,13 +81,29 @@ class PPO_agent:
 
         self.device = cfg["rl_device"]
 
-        self.env, _, _ = multitaskenv_constructor(env_cfg=self.env_cfg, device=self.device)
-
-        self.run_name = (
-            f"{self.env_cfg['env_name']}__{self.agent_cfg['name']}__{int(time.time())}"
+        self.env, _, _ = multitaskenv_constructor(
+            env_cfg=self.env_cfg, device=self.device
         )
 
-        self.writer = SummaryWriter(f"runs/{self.run_name}")
+        # logging
+        self.loggingEnabled = self.env_cfg.get("log_results", False)
+        self.save_model = self.env_cfg["save_model"]
+        if self.loggingEnabled:
+            log_dir = (
+                self.agent_cfg["name"]
+                + "/"
+                + self.env_cfg["env_name"]
+                + "/"
+                + EXP_DATETIME
+                + "/"
+            )
+            self.log_path = self.env_cfg["log_path"] + log_dir
+            pathlib.Path(self.log_path).mkdir(parents=True, exist_ok=True)
+            dcfg = omegaconf.DictConfig(cfg)
+            dcfg = omegaconf.OmegaConf.to_object(dcfg)
+            dump_cfg(self.log_path + "cfg", dcfg)
+
+            self.writer = SummaryWriter(self.log_path + "/tensorlogs/")
 
         self.agent = Agent(self.env).to(self.device)
         self.optimizer = optim.Adam(
@@ -187,22 +205,26 @@ class PPO_agent:
                     self.game_rewards.update(episodeRet[done_ids])
                     self.game_lengths.update(episodeLen[done_ids])
 
-                    episodic_return = self.game_rewards.get_mean() 
+                    episodic_return = self.game_rewards.get_mean()
                     episodic_length = self.game_lengths.get_mean()
-                    
-                    print(
-                        f"global_step={global_step}, episodic_return={episodic_return}"
-                    )
-                    wandb_metrics.update(
-                        {
-                            "rewards/step": episodic_return,
-                            "episode_lengths/step": episodic_length,
-                        }
-                    )
-                    self.writer.add_scalar("rewards/step", episodic_return, global_step)
-                    self.writer.add_scalar(
-                        "episode_lengths/step", episodic_length, global_step
-                    )
+
+                    # print(
+                    #     f"global_step={global_step}, episodic_return={episodic_return}"
+                    # )
+
+                    if self.loggingEnabled:
+                        wandb_metrics.update(
+                            {
+                                "rewards/step": episodic_return,
+                                "episode_lengths/step": episodic_length,
+                            }
+                        )
+                        self.writer.add_scalar(
+                            "rewards/step", episodic_return, global_step
+                        )
+                        self.writer.add_scalar(
+                            "episode_lengths/step", episodic_length, global_step
+                        )
 
             # bootstrap value if not done
             with torch.no_grad():
@@ -316,38 +338,71 @@ class PPO_agent:
                         break
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
-            self.writer.add_scalar(
-                "charts/learning_rate",
-                self.optimizer.param_groups[0]["lr"],
-                global_step,
-            )
-            self.writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-            self.writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-            self.writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-            self.writer.add_scalar(
-                "losses/old_approx_kl", old_approx_kl.item(), global_step
-            )
-            self.writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-            self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-            print("SPS:", int(global_step / (time.time() - start_time)))
-            self.writer.add_scalar(
-                "charts/SPS", int(global_step / (time.time() - start_time)), global_step
-            )
-            wandb_metrics.update(
-                {
-                    "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
-                    "losses/value_loss": v_loss.item(),
-                    "losses/entropy": entropy_loss.item(),
-                    "losses/old_approx_kl": old_approx_kl.item(),
-                    "losses/approx_kl": approx_kl.item(),
-                    "losses/clipfrac": np.mean(clipfracs),
-                }
-            )
+            if self.loggingEnabled:
+                self.writer.add_scalar(
+                    "charts/learning_rate",
+                    self.optimizer.param_groups[0]["lr"],
+                    global_step,
+                )
+                self.writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+                self.writer.add_scalar(
+                    "losses/policy_loss", pg_loss.item(), global_step
+                )
+                self.writer.add_scalar(
+                    "losses/entropy", entropy_loss.item(), global_step
+                )
+                self.writer.add_scalar(
+                    "losses/old_approx_kl", old_approx_kl.item(), global_step
+                )
+                self.writer.add_scalar(
+                    "losses/approx_kl", approx_kl.item(), global_step
+                )
+                self.writer.add_scalar(
+                    "losses/clipfrac", np.mean(clipfracs), global_step
+                )
+                # print("SPS:", int(global_step / (time.time() - start_time)))
+                self.writer.add_scalar(
+                    "charts/SPS",
+                    int(global_step / (time.time() - start_time)),
+                    global_step,
+                )
+                wandb_metrics.update(
+                    {
+                        "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
+                        "losses/value_loss": v_loss.item(),
+                        "losses/entropy": entropy_loss.item(),
+                        "losses/old_approx_kl": old_approx_kl.item(),
+                        "losses/approx_kl": approx_kl.item(),
+                        "losses/clipfrac": np.mean(clipfracs),
+                    }
+                )
 
-            wandb.log(wandb_metrics)
+                wandb.log(wandb_metrics)
+
+            print(
+                f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()}\tLenght: {self.game_lengths.get_mean()}"
+            )
+            if self.save_model and update % 200 == 0:
+                print(f"Saving model at step : {update}")
+                self.save_torch_model(update // 200)
 
         # envs.close()
-        self.writer.close()
+        if self.loggingEnabled:
+            self.writer.close()
 
     def test(self):
         raise NotImplemented
+
+    def save_torch_model(self, update_step):
+        from pathlib import Path
+
+        path = self.log_path + f"/model{update_step}.pt"
+        torch.save(self.agent.state_dict(), path)
+        # self.agent.save(path)
+
+    def load_torch_model(self, path):
+        self.agent.load_state_dict(torch.load(path))
+        # self.policy.load(path + "policy")
+        # self.critic.load(path + "critic")
+        # hard_update(self.critic_target, self.critic)
+        # grad_false(self.critic_target)
