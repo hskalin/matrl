@@ -210,7 +210,7 @@ class SACAgent(IsaacAgent):
         self.critic.save(path + "critic")
 
     def load_torch_model(self, path):
-        self.policy.load(path + "policy")
-        self.critic.load(path + "critic")
+        self.policy.load(path + "/policy")
+        self.critic.load(path + "/critic")
         hard_update(self.critic_target, self.critic)
         grad_false(self.critic_target)

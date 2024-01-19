@@ -396,7 +396,7 @@ class CompositionAgent(MultitaskAgent):
         self.sf.save(path + "sf")
 
     def load_torch_model(self, path):
-        self.policy.load(path + "policy")
-        self.sf.load(path + "sf")
+        self.policy.load(path + "/policy")
+        self.sf.load(path + "/sf")
         hard_update(self.sf_target, self.sf)
         grad_false(self.sf_target)

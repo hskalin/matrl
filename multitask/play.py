@@ -23,11 +23,18 @@ from tkinter import *
 
 # Initialize parser
 parser = argparse.ArgumentParser()
- 
+
 # Adding optional argument
-parser.add_argument("-p", "--path", help = "model save path", type=str, required=True)
-parser.add_argument("-c", "--checkpoint", help= "specific saved model e.g. model10", type=str, required=True)
- 
+parser.add_argument("-p", "--path", help="model save path", type=str, required=True)
+parser.add_argument(
+    "-c",
+    "--checkpoint",
+    help="specific saved model e.g. model10",
+    type=str,
+    required=True,
+)
+parser.add_argument("-n", "--num_envs", type=int, default=1)
+
 # Read arguments from command line
 args = parser.parse_args()
 
@@ -42,12 +49,15 @@ class PlayUI:
         self.agent = get_agent(cfg_dict)
         self.agent.load_torch_model(model_path)
 
-        self.weights = self.agent.task.Eval.W.clone()
+        # check if single task agent
+        self.isSingleTask = cfg_dict["agent"]["name"] == "ppo"
 
-        self.weightLabels = cfg_dict["env"]["task"]["taskLabels"]
+        if not self.isSingleTask:
+            self.weights = self.agent.task.Eval.W.clone()
+            self.weightLabels = cfg_dict["env"]["task"]["taskLabels"]
+            self.generate_scales()
 
         self.rew = None
-        self.generate_scales()
         self.print_step_reward()
 
     def weight_update_function(self, dimension):
@@ -112,6 +122,9 @@ class PlayUI:
             print(self.agent.task.Eval.W[0])
 
     def play(self):
+        if self.isSingleTask:
+            return self.play_ppo()
+
         avgStepRew = AverageMeter(1, 20).to(self.agent.device)
         while True:
             s = self.agent.reset_env()
@@ -132,6 +145,28 @@ class PlayUI:
                 if self.rew:
                     self.rew.set(avgStepRew.get_mean())
 
+    # play for single task
+    def play_ppo(self):
+        avgStepRew = AverageMeter(1, 20).to(self.agent.device)
+        self.agent.agent.eval()
+        while True:
+            next_obs = self.agent.env.obs_buf
+            for _ in range(5000):
+                with torch.no_grad():
+                    action, _, _, _ = self.agent.agent.get_action_and_value(next_obs)
+
+                self.agent.env.step(action)
+                next_obs, reward = (
+                    self.agent.env.obs_buf,
+                    self.agent.env.reward_buf,
+                )
+                self.agent.env.reset()
+
+                avgStepRew.update(reward)
+                if self.rew:
+                    self.rew.set(avgStepRew.get_mean())
+
+
 def modify_cfg(cfg_dict):
     cfg_dict["agent"]["norm_task_by_sf"] = False
     cfg_dict["agent"]["phase"] = 1
@@ -144,7 +179,7 @@ def modify_cfg(cfg_dict):
     cfg_dict["env"]["task"]["rand_vel_targets"] = False
     cfg_dict["env"]["mode"] = "play"
     cfg_dict["env"]["sim"]["headless"] = False
-    cfg_dict["env"]["num_envs"] = 1
+    cfg_dict["env"]["num_envs"] = args.num_envs
 
     if "aero" in cfg_dict["env"]:
         cfg_dict["env"]["aero"]["wind_mag"] = 0
@@ -153,6 +188,7 @@ def modify_cfg(cfg_dict):
     print_dict(cfg_dict)
 
     return cfg_dict
+
 
 @hydra.main(config_name="config", config_path="./cfg")
 def launch_rlg_hydra(cfg: DictConfig):
@@ -163,7 +199,7 @@ def launch_rlg_hydra(cfg: DictConfig):
 
     # print_dict(wandb_dict)
     update_dict(cfg_dict, wandb_dict)
-    
+
     cfg_dict = modify_cfg(cfg_dict)
 
     model_path = "/home/yutang/rl/sf_mutitask_rl/logs/rmacompblimp/BlimpRand/2023-12-23-07-15-08/model90"
@@ -179,7 +215,7 @@ def launch_play():
     model_checkpoint = args.checkpoint
 
     cfg_path = model_folder + "/cfg"
-    model_path = model_folder + "/" + model_checkpoint + "/"
+    model_path = model_folder + "/" + model_checkpoint
 
     cfg_dict = None
     with open(cfg_path) as f:
@@ -196,5 +232,5 @@ if __name__ == "__main__":
     torch.manual_seed(456)
     np.random.seed(456)
 
-    #launch_rlg_hydra()
+    # launch_rlg_hydra()
     launch_play()
