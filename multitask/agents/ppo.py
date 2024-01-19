@@ -380,9 +380,13 @@ class PPO_agent:
             print(
                 f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()}\tLenght: {self.game_lengths.get_mean()}"
             )
-            if self.save_model and update % 200 == 0:
+            if self.save_model and update % 100 == 0:
                 print(f"Saving model at step : {update}")
-                self.save_torch_model(update // 200)
+                self.save_torch_model(update // 100)
+
+        if self.save_model:
+            print(f"Saving final model")
+            self.save_torch_model(num_updates // 100)
 
         # envs.close()
         if self.loggingEnabled:
