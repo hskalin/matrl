@@ -72,12 +72,8 @@ class PPO_agent:
         self.agent_cfg = cfg["agent"]
         self.buffer_cfg = cfg["buffer"]
 
-        self.agent_cfg["batch_size"] = int(
-            self.env_cfg["num_envs"] * self.agent_cfg["num_steps"]
-        )
-        self.agent_cfg["minibatch_size"] = int(
-            self.agent_cfg["batch_size"] // self.agent_cfg["num_minibatches"]
-        )
+        self.batch_size = self.env_cfg["num_envs"] * self.agent_cfg["num_steps"]
+        self.minibatch_size = self.batch_size // self.agent_cfg["num_minibatches"]
 
         self.device = cfg["rl_device"]
 
@@ -114,7 +110,6 @@ class PPO_agent:
         self.game_lengths = AverageMeter(1, max_size=100).to("cuda:0")
 
         self._init_buffers()
-        ###
 
     def _init_buffers(self):
         # ALGO Logic: Storage setup
@@ -156,7 +151,7 @@ class PPO_agent:
         next_done = torch.zeros(self.env_cfg["num_envs"], dtype=torch.float).to(
             self.device
         )
-        num_updates = self.agent_cfg["total_timesteps"] // self.agent_cfg["batch_size"]
+        num_updates = self.agent_cfg["total_timesteps"] // self.batch_size
 
         for update in range(1, num_updates + 1):
             wandb_metrics = {}
@@ -223,6 +218,9 @@ class PPO_agent:
                             "rewards/step", episodic_return, global_step
                         )
                         self.writer.add_scalar(
+                            "rewards/time", episodic_return, time.time()-start_time
+                        )
+                        self.writer.add_scalar(
                             "episode_lengths/step", episodic_length, global_step
                         )
 
@@ -264,12 +262,12 @@ class PPO_agent:
             clipfracs = []
             for epoch in range(self.agent_cfg["update_epochs"]):
                 b_inds = torch.randperm(
-                    self.agent_cfg["batch_size"], device=self.device
+                    self.batch_size, device=self.device
                 )
                 for start in range(
-                    0, self.agent_cfg["batch_size"], self.agent_cfg["minibatch_size"]
+                    0, self.batch_size, self.minibatch_size
                 ):
-                    end = start + self.agent_cfg["minibatch_size"]
+                    end = start + self.minibatch_size
                     mb_inds = b_inds[start:end]
 
                     _, newlogprob, entropy, newvalue = self.agent.get_action_and_value(

@@ -41,7 +41,7 @@ sigma: ''
 # set to True to use multi-gpu horovod training
 multi_gpu: False
 
-wandb_log: True
+wandb_log: False
 wandb_group: ''
 #wandb_name: ${train.params.config.name}
 wandb_entity: ''
@@ -57,8 +57,8 @@ force_render: True
 
 # set default task and default training config based on task
 defaults:
-  - env: PointMass2D
-  - agent: COMP
+  - env: Ant
+  - agent: PPO
   - buffer: buffer
   - hydra/job_logging: disabled
 

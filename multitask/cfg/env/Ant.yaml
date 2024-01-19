@@ -1,6 +1,6 @@
 # used to create the object
 env_name: Ant
-num_envs: 1024
+num_envs: 2048
 envSpacing: 5
 
 clipActions: 1.0

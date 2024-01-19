@@ -1,13 +1,13 @@
 name: "ppo"
 total_timesteps: 30000000
-batch_size: 2048
+#batch_size: 2048
 learning_rate: 0.0026
-minibatch_size: 1024
+#minibatch_size: 1024
 num_steps: 32
 anneal_lr: True
 gamma: 0.99
 gae_lambda: 0.95
-num_minibatches: 2
+num_minibatches: 4
 update_epochs: 4
 norm_adv: True
 clip_coef: 0.2
