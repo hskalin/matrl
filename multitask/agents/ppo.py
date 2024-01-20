@@ -84,7 +84,6 @@ class PPO_agent:
         # logging
         self.loggingEnabled = self.env_cfg.get("log_results", False)
         self.save_model = self.env_cfg["save_model"]
-        self.log_rewards = self.env_cfg.get("log_rewards", ["return"])
         if self.loggingEnabled:
             log_dir = (
                 self.agent_cfg["name"]
@@ -107,7 +106,7 @@ class PPO_agent:
             self.agent.parameters(), lr=self.agent_cfg["learning_rate"], eps=1e-5
         )
 
-        self.game_rewards = AverageMeter(len(self.log_rewards), max_size=100).to(
+        self.game_rewards = AverageMeter(len(self.env.log_rewards), max_size=100).to(
             "cuda:0"
         )
         self.game_lengths = AverageMeter(1, max_size=100).to("cuda:0")
@@ -212,7 +211,7 @@ class PPO_agent:
 
                     if self.loggingEnabled:
                         wandb_metrics.update({"episode_lengths/step": episodic_length})
-                        for i, name in enumerate(self.log_rewards):
+                        for i, name in enumerate(self.env.log_rewards):
                             wandb_metrics.update(
                                 {f"episodic_{name}": episodic_returns[i]}
                             )

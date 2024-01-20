@@ -327,6 +327,39 @@ class Ant(VecEnv):
             self.return_buf,
         )
 
+        # total_costs = compute_ant_costs(self.actions, self.obs_buf, self.reset_buf, self.progress_buf, self.actions_cost_scale, self.energy_cost_scale, self.joints_at_limit_cost_scale, self.termination_height, self.max_episode_length)
+
+        # if self.single_task == "jump":
+        #     progress_reward, up_reward, jump_deviation = compute_ant_jump_reward(self.obs_buf, self.initial_root_states, self.root_states, self.up_weight)
+
+        #     self.reward_buf[:] = (
+        #         total_costs
+        #     + progress_reward
+        #     + up_reward
+        #     - jump_deviation
+        #     )
+
+        #     print(se)
+
+        #     self.return_buf += torch.cat(
+        #     (
+        #         self.reset_buf.unsqueeze(1),
+        #         progress_reward.unsqueeze(1),
+        #         up_reward.unsqueeze(1),
+        #         jump_deviation.unsqueeze(1),
+        #     ),
+        #     1,)
+        # else:
+        #     raise NotImplementedError(f"single task type '{self.single_task}' not implemented")
+
+        # # adjust reward for fallen agents
+        # self.reward_buf = torch.where(
+        #     self.obs_buf[:, 0] < self.termination_height,
+        #     torch.ones_like(self.reward_buf) * self.death_cost,
+        #     self.reward_buf,
+        # )
+
+
     def reset(self):
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
 
@@ -436,6 +469,63 @@ def compute_rot(torso_quat, velocity, ang_velocity, targets, torso_positions):
 
 
 @torch.jit.script
+def compute_ant_costs(
+        actions,
+        obs_buf,
+        reset_buf,
+    progress_buf,
+        actions_cost_scale,
+        energy_cost_scale,
+        joints_at_limit_cost_scale,
+        termination_height,
+    max_episode_length
+):
+    # type: (Tensor,Tensor,Tensor,Tensor,float,float,float,float,float) -> Tensor
+
+    # energy penalty for movement
+    actions_cost = torch.sum(actions**2, dim=-1)
+    electricity_cost = torch.sum(torch.abs(actions * obs_buf[:, 20:28]), dim=-1)
+    dof_at_limit_cost = torch.sum(obs_buf[:, 12:20] > 0.99, dim=-1)
+
+    # reward for duration of staying alive
+    alive_reward = torch.ones_like(actions_cost) * 0.5
+
+    # reset agents
+    reset = torch.where(
+        obs_buf[:, 0] < termination_height, torch.ones_like(reset_buf), reset_buf
+    )
+    reset = torch.where(
+        progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset
+    )
+
+    total_costs = (alive_reward
+                   - actions_cost*actions_cost_scale
+                   -electricity_cost*energy_cost_scale
+                   -dof_at_limit_cost*joints_at_limit_cost_scale)
+
+    return total_costs
+
+@torch.jit.script
+def compute_ant_jump_reward(obs_buf, initial_root_states, root_states, up_weight):
+    # type: (Tensor,Tensor,Tensor,float) -> Tuple[Tensor,Tensor,Tensor]
+    # aligning up axis of ant and environment
+    up_reward = torch.zeros_like(obs_buf[:,11])
+    up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
+
+    #progress_reward = potentials - prev_potentials
+    progress_reward = torch.where(obs_buf[:,0] > 0.8, torch.ones_like(up_reward)*2, -torch.zeros_like(up_reward)*0.5)
+    #progress_reward = 5*torch.exp(-1.4*(obs_buf[:,0] - 2.1)**2)
+
+    jump_deviation = torch.norm(initial_root_states[:, :2] - root_states[:, :2], p=2, dim=-1)*0.5
+
+    # reset initial_root if on ground
+    initial_root_states[:,0] = torch.where(obs_buf[:,0]<0.5, root_states[:,0], initial_root_states[:,0])
+    initial_root_states[:,1] = torch.where(obs_buf[:,0]<0.5, root_states[:,1], initial_root_states[:,1])
+
+    return progress_reward, up_reward, jump_deviation
+
+
+@torch.jit.script
 def compute_ant_reward(
     obs_buf,
     reset_buf,
@@ -465,10 +555,10 @@ def compute_ant_reward(
     #     heading_weight * obs_buf[:, 11] / 0.8,
     # )
 
-    heading_reward = torch.zeros_like(obs_buf[:,11])
+    # heading_reward = torch.zeros_like(obs_buf[:,11])
 
     # aligning up axis of ant and environment
-    up_reward = torch.zeros_like(heading_reward)
+    up_reward = torch.zeros_like(obs_buf[:,11])
     up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
 
     # energy penalty for movement
@@ -488,7 +578,6 @@ def compute_ant_reward(
         progress_reward
         + alive_reward
         + up_reward
-        + heading_reward
         - jump_deviation
         - actions_cost_scale * actions_cost
         - energy_cost_scale * electricity_cost
@@ -507,7 +596,6 @@ def compute_ant_reward(
             total_reward.unsqueeze(1),
             progress_reward.unsqueeze(1),
             up_reward.unsqueeze(1),
-            heading_reward.unsqueeze(1),
             jump_deviation.unsqueeze(1),
         ),
         1,

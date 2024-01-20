@@ -86,7 +86,10 @@ class VecEnv:
         self.reward_buf = torch.zeros(self.num_envs, device=self.sim_device)
 
         # record multiple components of the reward
-        self.rewardsToLog = len(cfg.get("log_rewards", ["return"]))
+        self.single_task = cfg["task"].get("single_task", "default")
+        self.log_rewards = cfg["task"].get("log_rewards_dict", {"default": ["return"]})[self.single_task]
+
+        self.rewardsToLog = len(self.log_rewards)
         self.return_buf = torch.zeros(
             (self.num_envs, self.rewardsToLog), device=self.sim_device
         )
