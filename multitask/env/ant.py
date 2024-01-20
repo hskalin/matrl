@@ -69,7 +69,7 @@ class Ant(VecEnv):
         self.plane_restitution = cfg["plane"]["restitution"]
         self.up_axis_idx = 2
 
-        self.num_obs = 60
+        self.num_obs = 60+2
         self.num_act = 8
 
         super().__init__(cfg=cfg)
@@ -303,6 +303,7 @@ class Ant(VecEnv):
             self.basis_vec0,
             self.basis_vec1,
             self.up_axis_idx,
+            self.initial_root_states,
         )
 
     def get_reward(self):
@@ -478,10 +479,10 @@ def compute_ant_reward(
     # reward for duration of staying alive
     alive_reward = torch.ones_like(potentials) * 0.5
     #progress_reward = potentials - prev_potentials
-    progress_reward = torch.where(obs_buf[:,0] > 0.6, torch.ones_like(potentials)*2, -torch.zeros_like(potentials)*0.5)
+    progress_reward = torch.where(obs_buf[:,0] > 0.8, torch.ones_like(potentials)*2, -torch.zeros_like(potentials)*0.5)
     #progress_reward = 5*torch.exp(-1.4*(obs_buf[:,0] - 2.1)**2)
 
-    jump_deviation = torch.norm(initial_root_states[:, :2] - root_states[:, :2], p=2, dim=-1)
+    jump_deviation = torch.norm(initial_root_states[:, :2] - root_states[:, :2], p=2, dim=-1)*0.5
 
     total_reward = (
         progress_reward
@@ -521,8 +522,8 @@ def compute_ant_reward(
     )
 
     # reset initial_root if on ground
-    initial_root_states[:,0] = torch.where(obs_buf[:,0]<0.6, root_states[:,0], initial_root_states[:,0])
-    initial_root_states[:,1] = torch.where(obs_buf[:,0]<0.6, root_states[:,1], initial_root_states[:,1])
+    initial_root_states[:,0] = torch.where(obs_buf[:,0]<0.5, root_states[:,0], initial_root_states[:,0])
+    initial_root_states[:,1] = torch.where(obs_buf[:,0]<0.5, root_states[:,1], initial_root_states[:,1])
 
     return total_reward, reset, initial_root_states, return_buf
 
@@ -546,8 +547,9 @@ def compute_ant_observations(
     basis_vec0,
     basis_vec1,
     up_axis_idx,
+    initial_root_states,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor, Tensor, float, float, Tensor, Tensor, int) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor, Tensor, float, float, Tensor, Tensor, int, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
     torso_position = root_states[:, 0:3]
     torso_rotation = root_states[:, 3:7]
@@ -585,6 +587,7 @@ def compute_ant_observations(
             dof_vel * dof_vel_scale,
             sensor_force_torques.view(-1, 24) * contact_force_scale,
             actions,
+            initial_root_states[:,:2]-torso_position[:,:2],
         ),
         dim=-1,
     )
