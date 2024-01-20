@@ -84,7 +84,13 @@ class VecEnv:
             (self.num_envs, self.num_obs), device=self.sim_device
         )
         self.reward_buf = torch.zeros(self.num_envs, device=self.sim_device)
-        self.return_buf = torch.zeros(self.num_envs, device=self.sim_device)
+
+        # record multiple components of the reward
+        self.rewardsToLog = len(cfg.get("log_rewards", ["return"]))
+        self.return_buf = torch.zeros(
+            (self.num_envs, self.rewardsToLog), device=self.sim_device
+        )
+
         self.truncated_buf = torch.zeros(self.num_envs, device=self.sim_device)
         self.reset_buf = torch.ones(
             self.num_envs, device=self.sim_device, dtype=torch.long

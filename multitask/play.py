@@ -181,6 +181,8 @@ def modify_cfg(cfg_dict):
     cfg_dict["env"]["sim"]["headless"] = False
     cfg_dict["env"]["num_envs"] = args.num_envs
 
+    cfg_dict["env"]["log_results"] = False
+
     if "aero" in cfg_dict["env"]:
         cfg_dict["env"]["aero"]["wind_mag"] = 0
     if "domain_rand" in cfg_dict["env"]["task"]:

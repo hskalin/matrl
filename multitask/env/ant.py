@@ -143,12 +143,12 @@ class Ant(VecEnv):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
-        self.targets = to_torch([1000, 0, 0], device=self.device).repeat(
+        self.targets = to_torch([100, 0, 0], device=self.device).repeat(
             (self.num_envs, 1)
         )
-        self.target_dirs = to_torch([1, 0, 0], device=self.device).repeat(
-            (self.num_envs, 1)
-        )
+        # self.target_dirs = to_torch([1, 0, 0], device=self.device).repeat(
+        #     (self.num_envs, 1)
+        # )
         self.dt = cfg["sim"]["dt"]
         self.potentials = to_torch([-1000.0 / self.dt], device=self.device).repeat(
             self.num_envs
@@ -413,7 +413,7 @@ def compute_heading_and_up(
     heading_proj = torch.bmm(
         heading_vec.view(num_envs, 1, 3), target_dirs.view(num_envs, 3, 1)
     ).view(num_envs)
-   
+
     return torso_quat, up_proj, heading_proj, up_vec, heading_vec
 
 
@@ -490,7 +490,15 @@ def compute_ant_reward(
         total_reward,
     )
 
-    return_buf += total_reward
+    return_buf += torch.cat(
+        (
+            total_reward.unsqueeze(1),
+            progress_reward.unsqueeze(1),
+            up_reward.unsqueeze(1),
+            heading_reward.unsqueeze(1),
+        ),
+        1,
+    )
 
     # reset agents
     reset = torch.where(

@@ -84,6 +84,7 @@ class PPO_agent:
         # logging
         self.loggingEnabled = self.env_cfg.get("log_results", False)
         self.save_model = self.env_cfg["save_model"]
+        self.log_rewards = self.env_cfg.get("log_rewards", ["return"])
         if self.loggingEnabled:
             log_dir = (
                 self.agent_cfg["name"]
@@ -106,7 +107,9 @@ class PPO_agent:
             self.agent.parameters(), lr=self.agent_cfg["learning_rate"], eps=1e-5
         )
 
-        self.game_rewards = AverageMeter(1, max_size=100).to("cuda:0")
+        self.game_rewards = AverageMeter(len(self.log_rewards), max_size=100).to(
+            "cuda:0"
+        )
         self.game_lengths = AverageMeter(1, max_size=100).to("cuda:0")
 
         self._init_buffers()
@@ -200,28 +203,30 @@ class PPO_agent:
                     self.game_rewards.update(episodeRet[done_ids])
                     self.game_lengths.update(episodeLen[done_ids])
 
-                    episodic_return = self.game_rewards.get_mean()
                     episodic_length = self.game_lengths.get_mean()
+                    episodic_returns = self.game_rewards.get_mean()
 
                     # print(
                     #     f"global_step={global_step}, episodic_return={episodic_return}"
                     # )
 
                     if self.loggingEnabled:
-                        wandb_metrics.update(
-                            {
-                                "rewards/step": episodic_return,
-                                "episode_lengths/step": episodic_length,
-                            }
+                        wandb_metrics.update({"episode_lengths/step": episodic_length})
+                        for i, name in enumerate(self.log_rewards):
+                            wandb_metrics.update(
+                                {f"episodic_{name}": episodic_returns[i]}
+                            )
+                            self.writer.add_scalar(
+                                f"step/{name}", episodic_returns[i], global_step
+                            )
+
+                        self.writer.add_scalar(
+                            "time/return",
+                            episodic_returns[0],
+                            time.time() - start_time,
                         )
                         self.writer.add_scalar(
-                            "rewards/step", episodic_return, global_step
-                        )
-                        self.writer.add_scalar(
-                            "rewards/time", episodic_return, time.time()-start_time
-                        )
-                        self.writer.add_scalar(
-                            "episode_lengths/step", episodic_length, global_step
+                            "step/episode_lengths", episodic_length, global_step
                         )
 
             # bootstrap value if not done
@@ -261,12 +266,8 @@ class PPO_agent:
             # Optimizing the policy and value network
             clipfracs = []
             for epoch in range(self.agent_cfg["update_epochs"]):
-                b_inds = torch.randperm(
-                    self.batch_size, device=self.device
-                )
-                for start in range(
-                    0, self.batch_size, self.minibatch_size
-                ):
+                b_inds = torch.randperm(self.batch_size, device=self.device)
+                for start in range(0, self.batch_size, self.minibatch_size):
                     end = start + self.minibatch_size
                     mb_inds = b_inds[start:end]
 
@@ -378,7 +379,7 @@ class PPO_agent:
                 wandb.log(wandb_metrics)
 
             print(
-                f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()}\tLenght: {self.game_lengths.get_mean()}"
+                f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()[0]}\tLenght: {self.game_lengths.get_mean()}"
             )
             if self.save_model and update % 100 == 0:
                 print(f"Saving model at step : {update}")
