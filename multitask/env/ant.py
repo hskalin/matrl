@@ -133,7 +133,7 @@ class Ant(VecEnv):
         self.up_vec = to_torch(
             get_axis_params(1.0, self.up_axis_idx), device=self.device
         ).repeat((self.num_envs, 1))
-        self.heading_vec = to_torch([1, 0, 0], device=self.device).repeat(
+        self.heading_vec = to_torch([0, 0, 1], device=self.device).repeat(
             (self.num_envs, 1)
         )
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
@@ -306,7 +306,7 @@ class Ant(VecEnv):
         )
 
     def get_reward(self):
-        self.reward_buf[:], self.reset_buf[:], self.return_buf[:] = compute_ant_reward(
+        self.reward_buf[:], self.reset_buf[:], self.initial_root_states[:], self.return_buf[:] = compute_ant_reward(
             self.obs_buf,
             self.reset_buf,
             self.progress_buf,
@@ -321,6 +321,8 @@ class Ant(VecEnv):
             self.termination_height,
             self.death_cost,
             self.max_episode_length,
+            self.initial_root_states,
+            self.root_states,
             self.return_buf,
         )
 
@@ -448,17 +450,21 @@ def compute_ant_reward(
     termination_height,
     death_cost,
     max_episode_length,
+    initial_root_states,
+    root_states,
     return_buf,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, float, float, Tensor, Tensor, float, float, float, float, float, float, Tensor) -> Tuple[Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, float, float, Tensor, Tensor, float, float, float, float, float, float, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor,Tensor]
 
     # reward from direction headed
-    heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
-    heading_reward = torch.where(
-        obs_buf[:, 11] > 0.8,
-        heading_weight_tensor,
-        heading_weight * obs_buf[:, 11] / 0.8,
-    )
+    # heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
+    # heading_reward = torch.where(
+    #     obs_buf[:, 11] > 0.8,
+    #     heading_weight_tensor,
+    #     heading_weight * obs_buf[:, 11] / 0.8,
+    # )
+
+    heading_reward = torch.zeros_like(obs_buf[:,11])
 
     # aligning up axis of ant and environment
     up_reward = torch.zeros_like(heading_reward)
@@ -471,13 +477,18 @@ def compute_ant_reward(
 
     # reward for duration of staying alive
     alive_reward = torch.ones_like(potentials) * 0.5
-    progress_reward = potentials - prev_potentials
+    #progress_reward = potentials - prev_potentials
+    progress_reward = torch.where(obs_buf[:,0] > 0.6, torch.ones_like(potentials)*2, -torch.zeros_like(potentials)*0.5)
+    #progress_reward = 5*torch.exp(-1.4*(obs_buf[:,0] - 2.1)**2)
+
+    jump_deviation = torch.norm(initial_root_states[:, :2] - root_states[:, :2], p=2, dim=-1)
 
     total_reward = (
         progress_reward
         + alive_reward
         + up_reward
         + heading_reward
+        - jump_deviation
         - actions_cost_scale * actions_cost
         - energy_cost_scale * electricity_cost
         - dof_at_limit_cost * joints_at_limit_cost_scale
@@ -496,6 +507,7 @@ def compute_ant_reward(
             progress_reward.unsqueeze(1),
             up_reward.unsqueeze(1),
             heading_reward.unsqueeze(1),
+            jump_deviation.unsqueeze(1),
         ),
         1,
     )
@@ -508,7 +520,11 @@ def compute_ant_reward(
         progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset
     )
 
-    return total_reward, reset, return_buf
+    # reset initial_root if on ground
+    initial_root_states[:,0] = torch.where(obs_buf[:,0]<0.6, root_states[:,0], initial_root_states[:,0])
+    initial_root_states[:,1] = torch.where(obs_buf[:,0]<0.6, root_states[:,1], initial_root_states[:,1])
+
+    return total_reward, reset, initial_root_states, return_buf
 
 
 @torch.jit.script
