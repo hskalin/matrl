@@ -57,7 +57,7 @@ task:
   proximity_threshold: 3
 
   # targets for play
-  # target_pos:       [0, 0, 2] # x, y
+  target_pos:       [1000.0, 0.0, 0.0] # x, y
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
