@@ -77,7 +77,8 @@ task:
 
   # for PPO/single task training and logging
   single_task: "jump"
-  log_rewards_dict: {"jump" : ["return", "progress", "up", "jump_deviation"]}
+  log_rewards_dict: {"jump" : ["return", "progress", "up", "jump_deviation"],
+                     "run" : ["return", "progress", "up", "heading"]}
 
 feature:
   verbose: True
