@@ -1,6 +1,6 @@
 # used to create the object
 env_name: Ant
-num_envs: 2048
+num_envs: 10 #2048
 envSpacing: 5
 
 clipActions: 1.0
@@ -61,8 +61,8 @@ task:
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
-  task_wEval:   [1, 1, 1]
-  task_wTrain:  [1, 1, 1]  
+  task_wEval:   [1, 1, 1, 1, 1]
+  task_wTrain:  [1, 1, 1, 1, 1]  
 
   # can be "uniform", "permute", "identity", "achievable"
   taskSet_train: "achievable"
@@ -71,9 +71,9 @@ task:
 
   # set of achievable task weights
   taskSet:
-    achievable: [[1,0,1],
-                [0,1,1],
-                [1,1,1]]
+    achievable: [[1,1,1,1,1],
+                 [1,1,1,1,1],
+                 [1,1,1,1,1]]
 
   # for PPO/single task training and logging
   single_task: "jump"
@@ -82,8 +82,6 @@ task:
 
 feature:
   verbose: True
-  dim: 2 # pointmass N dim
-  use_feature: [True, True, True] #[pos_x, pos_y, alive] 
 
 
 sim:

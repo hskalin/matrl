@@ -135,9 +135,9 @@ class Ant(VecEnv):
         ).repeat((self.num_envs, 1))
 
         goal_vec = torch.tensor(cfg["task"]["target_pos"])
-        self.heading_vec = to_torch(goal_vec/goal_vec.norm(p=2, keepdim=True), device=self.device).repeat(
-            (self.num_envs, 1)
-        )
+        self.heading_vec = to_torch(
+            goal_vec / goal_vec.norm(p=2, keepdim=True), device=self.device
+        ).repeat((self.num_envs, 1))
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
             (self.num_envs, 1)
         )
@@ -145,10 +145,8 @@ class Ant(VecEnv):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
-        self.targets = to_torch(goal_vec, device=self.device).repeat(
-            (self.num_envs, 1)
-        )
- 
+        self.targets = to_torch(goal_vec, device=self.device).repeat((self.num_envs, 1))
+
         self.dt = cfg["sim"]["dt"]
         self.potentials = to_torch([-1000.0 / self.dt], device=self.device).repeat(
             self.num_envs
@@ -671,7 +669,7 @@ def compute_ant_observations(
 
     dof_pos_scaled = unscale(dof_pos, dof_limits_lower, dof_limits_upper)
 
-    # obs_buf shapes: 1, 3, 3, 1, 1, 1, 1, 1, num_dofs(8), num_dofs(8), 24, num_dofs(8)
+    # obs_buf shapes: 1, 3, 3, 1, 1, 1, 1, 1, num_dofs(8), num_dofs(8), 24, num_dofs(8), 2
     obs = torch.cat(
         (
             torso_position[:, up_axis_idx].view(-1, 1),

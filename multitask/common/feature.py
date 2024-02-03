@@ -10,6 +10,10 @@ class FeatureAbstract(ABC):
         """extract state and return hand-crafted features"""
         pass
 
+    def compute_gaussDist(self, mu, sigma, scale):
+        mu = torch.norm(mu, dim=1, keepdim=True) ** 2
+        return torch.exp(scale * -mu / sigma**2)
+
 
 class PointMassFeature(FeatureAbstract):
     """features
@@ -405,10 +409,6 @@ class BlimpFeature(FeatureAbstract):
     def compute_featureAngVelNorm(self, x, scale=50):
         return self.compute_gaussDist(x, self.Kv, scale)
 
-    def compute_gaussDist(self, mu, sigma, scale):
-        mu = torch.norm(mu, dim=1, keepdim=True) ** 2
-        return torch.exp(scale * -mu / sigma**2)
-
 
 class AntFeature(FeatureAbstract):
     """
@@ -422,33 +422,93 @@ class AntFeature(FeatureAbstract):
         self.feature_cfg = self.env_cfg["feature"]
         self.device = device
 
-        self.use_feature = self.feature_cfg["use_feature"]
         self.verbose = self.feature_cfg.get("verbose", False)
 
-        self.envdim = int(self.env_cfg["feature"]["dim"])
+        self.dim = 5
+        if self.verbose:
+            print("[Feature] dim", self.dim)
 
-        (self.use_pos_x, self.use_pos_y, self.use_alive) = self.use_feature
+        # constants
+        self.direction_threshold = 0.93
+        self.dof_pos_threshold = 0.99
+        self.alive_reward_scale = 0.5
+        self.jump_threshold = 0.8
+        self.up_weight = self.env_cfg["upWeight"]
+        self.actions_cost_scale = self.env_cfg["actionsCost"]
+        self.energy_cost_scale = self.env_cfg["energyCost"]
+        self.joints_at_limit_cost_scale = self.env_cfg["jointsAtLimitCost"]
+        self.death_cost = self.env_cfg["deathCost"]
+        self.termination_height = self.env_cfg["terminationHeight"]
 
-        self.feature_dim = [self.use_pos_x, self.use_pos_y, self.use_alive]
-
-        self.dim = int(sum(self.feature_dim))
-
-        self.slice_pos_x = slice(0, 1)
-        self.slice_pos_y = slice(1, 2)
+        # indices
+        self.slice_pos_actions = slice(52, 52 + 8)
+        self.slice_pos_dof_velocity = slice(20, 20 + 8)
+        self.slice_pos_dof_pos_scaled = slice(12, 12 + 8)
+        self.slice_pos_deviation = slice(60, 60 + 2)
+        self.pos_up_proj = 10
+        self.pos_z = 0
 
     def extract(self, s):
         features = []
 
-        if self.use_pos_x:
-            features.append(s[:, 0])
+        x = self.compute_up_reward(s[:, self.pos_up_proj])
+        features.append(x.unsqueeze(-1))
 
-        if self.use_pos_y:
-            features.append(s[:, 0])
+        x = self.compute_jump_reward(s[:, self.pos_z])
+        features.append(x.unsqueeze(-1))
 
-        if self.use_alive:
-            features.append(s[:, 0])
+        x = self.compute_jump_deviation_cost(s[:, self.slice_pos_deviation])
+        features.append(x.unsqueeze(-1))
+
+        x = self.compute_alive_reward(s[:, 0], self.alive_reward_scale)
+        features.append(x.unsqueeze(-1))
+
+        # operation costs
+        x = self.compute_actions_cost(
+            s[:, self.slice_pos_actions], self.actions_cost_scale
+        )
+        x += self.compute_electricity_cost(
+            s[:, self.slice_pos_actions],
+            s[:, self.slice_pos_dof_velocity],
+            self.energy_cost_scale,
+        )
+        x += self.compute_dof_at_limit_cost(
+            s[:, self.slice_pos_dof_pos_scaled], self.joints_at_limit_cost_scale
+        )
+        features.append(x.unsqueeze(-1))
 
         return torch.cat(features, 1)
+
+    def compute_up_reward(self, up_vec, scale=1):
+        up_reward = torch.zeros_like(up_vec)
+        return torch.where(
+            up_vec > self.direction_threshold,
+            up_reward + self.up_weight * scale,
+            up_reward,
+        )
+
+    def compute_actions_cost(self, actions, scale=1):
+        return -scale * torch.sum(actions**2, dim=-1)
+
+    def compute_electricity_cost(self, actions, vels, scale=1):
+        return -scale * torch.sum(torch.abs(actions * vels), dim=-1)
+
+    def compute_dof_at_limit_cost(self, dof_pos, scale=1):
+        return -scale * torch.sum(dof_pos > self.dof_pos_threshold, dim=-1)
+
+    def compute_alive_reward(self, x, scale=0.5):
+        return scale * torch.ones_like(x)
+
+    def compute_jump_reward(self, z, reward_scale=2, penalty_scale=0.0):
+        jump_reward = torch.ones_like(z)
+        return torch.where(
+            z > self.jump_threshold,
+            reward_scale * jump_reward,
+            -penalty_scale * jump_reward,
+        )
+
+    def compute_jump_deviation_cost(self, deviation, scale=0.5):
+        return -scale * torch.norm(deviation, p=2, dim=-1)
 
 
 def feature_constructor(env_cfg, device):

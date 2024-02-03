@@ -77,9 +77,10 @@ class PPO_agent:
 
         self.device = cfg["rl_device"]
 
-        self.env, _, _ = multitaskenv_constructor(
+        self.env, self.feature, self.task = multitaskenv_constructor(
             env_cfg=self.env_cfg, device=self.device
         )
+        assert self.feature.dim == self.task.dim, "feature and task dimension mismatch"
 
         # logging
         self.loggingEnabled = self.env_cfg.get("log_results", False)
@@ -142,6 +143,11 @@ class PPO_agent:
     def update(self):
         raise NotImplemented
 
+    def calc_reward(self, s, w):
+        f = self.feature.extract(s)
+        r = torch.sum(w * f, 1)
+        return r
+
     def run(self):
         # TRY NOT TO MODIFY: start the game
         global_step = 0
@@ -182,13 +188,13 @@ class PPO_agent:
                 # next_obs, rewards[step], next_done, info = envs.step(action)
 
                 self.env.step(action)
-                next_obs, self.rewards[step], next_done, episodeLen, episodeRet = (
+                next_obs, next_done, episodeLen, episodeRet = (
                     self.env.obs_buf,
-                    self.env.reward_buf,
                     self.env.reset_buf.clone(),
                     self.env.progress_buf.clone(),
                     self.env.return_buf.clone(),
                 )
+                self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
                 self.env.reset()
 
                 # if 0 <= step <= 2:
