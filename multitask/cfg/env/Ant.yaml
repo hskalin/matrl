@@ -1,6 +1,6 @@
 # used to create the object
 env_name: Ant
-num_envs: 10 #2048
+num_envs: 2048
 envSpacing: 5
 
 clipActions: 1.0
@@ -57,7 +57,7 @@ task:
   proximity_threshold: 3
 
   # targets for play
-  target_pos:       [1000.0, 0.0, 0.0] # x, y
+  target_pos:       [0.0, 0.0, 1000.0] # x, y
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox

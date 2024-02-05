@@ -188,16 +188,17 @@ class PPO_agent:
                 # next_obs, rewards[step], next_done, info = envs.step(action)
 
                 self.env.step(action)
-                next_obs, next_done, episodeLen, episodeRet = (
+                self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
+                next_obs, rews, next_done, episodeLen, episodeRet = (
                     self.env.obs_buf,
+                    self.env.reward_buf,
                     self.env.reset_buf.clone(),
                     self.env.progress_buf.clone(),
                     self.env.return_buf.clone(),
                 )
-                self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
+                #self.rewards[step] = rews
                 self.env.reset()
 
-                # if 0 <= step <= 2:
                 done_ids = next_done.nonzero(as_tuple=False).squeeze(-1)
                 if done_ids.size()[0]:
                     # taking mean over all envs that are done at the
@@ -232,6 +233,9 @@ class PPO_agent:
                         )
                         self.writer.add_scalar(
                             "step/episode_lengths", episodic_length, global_step
+                        )
+                        self.writer.add_scalar(
+                            "diff/reward", torch.norm(self.rewards[step]-rews,2).item(), global_step
                         )
 
             # bootstrap value if not done

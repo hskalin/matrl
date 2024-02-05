@@ -134,10 +134,22 @@ class Ant(VecEnv):
             get_axis_params(1.0, self.up_axis_idx), device=self.device
         ).repeat((self.num_envs, 1))
 
-        goal_vec = torch.tensor(cfg["task"]["target_pos"])
-        self.heading_vec = to_torch(
-            goal_vec / goal_vec.norm(p=2, keepdim=True), device=self.device
-        ).repeat((self.num_envs, 1))
+        # goal_vec = torch.tensor(cfg["task"]["target_pos"])
+        # self.heading_vec = to_torch(
+        #     goal_vec / goal_vec.norm(p=2, keepdim=True), device=self.device
+        # ).repeat((self.num_envs, 1))
+        # self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
+        #     (self.num_envs, 1)
+        # )
+
+        # self.basis_vec0 = self.heading_vec.clone()
+        # self.basis_vec1 = self.up_vec.clone()
+
+        # self.targets = to_torch(goal_vec, device=self.device).repeat((self.num_envs, 1))
+
+        self.heading_vec = to_torch([0, 0, 1], device=self.device).repeat(
+            (self.num_envs, 1)
+        )
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
             (self.num_envs, 1)
         )
@@ -145,7 +157,16 @@ class Ant(VecEnv):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
-        self.targets = to_torch(goal_vec, device=self.device).repeat((self.num_envs, 1))
+        self.targets = to_torch([100, 0, 0], device=self.device).repeat(
+            (self.num_envs, 1)
+        )
+        # self.target_dirs = to_torch([1, 0, 0], device=self.device).repeat(
+        #     (self.num_envs, 1)
+        # )
+        self.dt = cfg["sim"]["dt"]
+        self.potentials = to_torch([-1000.0 / self.dt], device=self.device).repeat(
+            self.num_envs
+        )
 
         self.dt = cfg["sim"]["dt"]
         self.potentials = to_torch([-1000.0 / self.dt], device=self.device).repeat(
