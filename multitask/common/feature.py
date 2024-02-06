@@ -449,66 +449,76 @@ class AntFeature(FeatureAbstract):
         self.pos_z = 0
 
     def extract(self, s):
-        features = []
-
-        x = self.compute_up_reward(s[:, self.pos_up_proj])
-        features.append(x.unsqueeze(-1))
-
-        x = self.compute_jump_reward(s[:, self.pos_z])
-        features.append(x.unsqueeze(-1))
-
-        x = self.compute_jump_deviation_cost(s[:, self.slice_pos_deviation])
-        features.append(x.unsqueeze(-1))
-
-        x = self.compute_alive_reward(s[:, 0], self.alive_reward_scale)
-        features.append(x.unsqueeze(-1))
-
-        # operation costs
-        x = self.compute_actions_cost(
-            s[:, self.slice_pos_actions], self.actions_cost_scale
-        )
-        x += self.compute_electricity_cost(
-            s[:, self.slice_pos_actions],
-            s[:, self.slice_pos_dof_velocity],
+        features = compute_ant_jump_reward(
+            s,
+            self.up_weight,
+            self.actions_cost_scale,
             self.energy_cost_scale,
+            self.joints_at_limit_cost_scale,
+            self.termination_height,
+            self.death_cost,
+            self.dim
         )
-        x += self.compute_dof_at_limit_cost(
-            s[:, self.slice_pos_dof_pos_scaled], self.joints_at_limit_cost_scale
-        )
-        features.append(x.unsqueeze(-1))
+        
+        return features
 
-        return torch.cat(features, 1)
+@torch.jit.script
+def compute_ant_jump_reward(
+    obs_buf,
+    up_weight,
+    actions_cost_scale,
+    energy_cost_scale,
+    joints_at_limit_cost_scale,
+    termination_height,
+    death_cost,
+    scale,
+):
+    # type: (Tensor, float, float, float, float, float, float, float) -> Tensor
 
-    def compute_up_reward(self, up_vec, scale=1):
-        up_reward = torch.zeros_like(up_vec)
-        return torch.where(
-            up_vec > self.direction_threshold,
-            up_reward + self.up_weight * scale,
-            up_reward,
-        )
+    # aligning up axis of ant and environment
+    up_reward = torch.zeros_like(obs_buf[:, 11])
+    up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
 
-    def compute_actions_cost(self, actions, scale=1):
-        return -scale * torch.sum(actions**2, dim=-1)
+    # energy penalty for movement
+    actions_cost = torch.sum(obs_buf[:,52:60]**2, dim=-1)
+    electricity_cost = torch.sum(torch.abs(obs_buf[:,52:60] * obs_buf[:, 20:28]), dim=-1)
+    dof_at_limit_cost = torch.sum(obs_buf[:, 12:20] > 0.99, dim=-1)
 
-    def compute_electricity_cost(self, actions, vels, scale=1):
-        return -scale * torch.sum(torch.abs(actions * vels), dim=-1)
+    # reward for duration of staying alive
+    alive_reward = torch.ones_like(up_reward) * 0.5
+    progress_reward = torch.where(
+        obs_buf[:, 0] > 0.8,
+        torch.ones_like(up_reward) * 2,
+        -torch.zeros_like(up_reward) * 0.5,
+    )
 
-    def compute_dof_at_limit_cost(self, dof_pos, scale=1):
-        return -scale * torch.sum(dof_pos > self.dof_pos_threshold, dim=-1)
+    jump_deviation = (
+        torch.norm(obs_buf[:,60:62], p=2, dim=-1) * 0.5
+    )
 
-    def compute_alive_reward(self, x, scale=0.5):
-        return scale * torch.ones_like(x)
+    features = torch.cat(
+        (
+            progress_reward.unsqueeze(-1),
+            alive_reward.unsqueeze(-1),
+            up_reward.unsqueeze(-1),
+            -jump_deviation.unsqueeze(-1),
+            (
+                - actions_cost_scale * actions_cost
+                - energy_cost_scale * electricity_cost
+                - dof_at_limit_cost * joints_at_limit_cost_scale
+            ).unsqueeze(-1)
+        ),
+        1,
+    )
 
-    def compute_jump_reward(self, z, reward_scale=2, penalty_scale=0.0):
-        jump_reward = torch.ones_like(z)
-        return torch.where(
-            z > self.jump_threshold,
-            reward_scale * jump_reward,
-            -penalty_scale * jump_reward,
-        )
+    condition = obs_buf[:, 0] < termination_height
+    # Create a mask for the rows that satisfy the condition
+    mask = condition.unsqueeze(1).expand_as(features)
+    # Replace the values for the selected rows
+    features[mask] = death_cost / scale
 
-    def compute_jump_deviation_cost(self, deviation, scale=0.5):
-        return -scale * torch.norm(deviation, p=2, dim=-1)
+    return features
+
 
 
 def feature_constructor(env_cfg, device):

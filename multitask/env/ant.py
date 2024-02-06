@@ -505,8 +505,8 @@ def compute_ant_jump_reward(
     up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
 
     # energy penalty for movement
-    actions_cost = torch.sum(actions**2, dim=-1)
-    electricity_cost = torch.sum(torch.abs(actions * obs_buf[:, 20:28]), dim=-1)
+    actions_cost = torch.sum(obs_buf[:,52:60]**2, dim=-1)
+    electricity_cost = torch.sum(torch.abs(obs_buf[:,52:60] * obs_buf[:, 20:28]), dim=-1)
     dof_at_limit_cost = torch.sum(obs_buf[:, 12:20] > 0.99, dim=-1)
 
     # reward for duration of staying alive
@@ -518,7 +518,7 @@ def compute_ant_jump_reward(
     )
 
     jump_deviation = (
-        torch.norm(initial_root_states[:, :2] - root_states[:, :2], p=2, dim=-1) * 0.5
+        torch.norm(obs_buf[:,60:62], p=2, dim=-1) * 0.5
     )
 
     total_reward = (

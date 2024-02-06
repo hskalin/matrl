@@ -145,7 +145,7 @@ class PPO_agent:
 
     def calc_reward(self, s, w):
         f = self.feature.extract(s)
-        r = torch.sum(w * f, 1)
+        r = torch.sum(w * f, 1) * self.feature.dim
         return r
 
     def run(self):
@@ -188,7 +188,6 @@ class PPO_agent:
                 # next_obs, rewards[step], next_done, info = envs.step(action)
 
                 self.env.step(action)
-                self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
                 next_obs, rews, next_done, episodeLen, episodeRet = (
                     self.env.obs_buf,
                     self.env.reward_buf,
@@ -196,7 +195,8 @@ class PPO_agent:
                     self.env.progress_buf.clone(),
                     self.env.return_buf.clone(),
                 )
-                #self.rewards[step] = rews
+                self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
+                # self.rewards[step] = rews
                 self.env.reset()
 
                 done_ids = next_done.nonzero(as_tuple=False).squeeze(-1)
