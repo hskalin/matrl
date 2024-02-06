@@ -157,7 +157,7 @@ class Ant(VecEnv):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
-        self.targets = to_torch([1000, 0, 0], device=self.device).repeat(
+        self.targets = to_torch([2000, 0, 0], device=self.device).repeat(
             (self.num_envs, 1)
         )
         # self.target_dirs = to_torch([1, 0, 0], device=self.device).repeat(

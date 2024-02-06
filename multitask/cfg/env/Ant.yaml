@@ -65,8 +65,8 @@ task:
   task_wTrain:  [1, 1, 1, 1, 1, 1, 1]  
 
   # can be "uniform", "permute", "identity", "achievable"
-  taskSet_train: "jump"
-  taskSet_eval: "jump"
+  taskSet_train: "run"
+  taskSet_eval: "run"
   adaptive_task: True
 
   # set of achievable task weights
