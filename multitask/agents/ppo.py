@@ -381,7 +381,7 @@ class PPO_agent:
                 wandb.log(wandb_metrics)
 
             print(
-                f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()[0]}\tLenght: {self.game_lengths.get_mean()}"
+                f"Update: {update}\tSPS: {int(global_step / (time.time() - start_time))}\tReturn: {self.game_rewards.get_mean()[-1]}\tLenght: {self.game_lengths.get_mean()}"
             )
             if self.save_model and update % 100 == 0:
                 print(f"Saving model at step : {update}")

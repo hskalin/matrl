@@ -61,8 +61,8 @@ task:
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
-  task_wEval:   [1, 1, 1, 1, 1]
-  task_wTrain:  [1, 1, 1, 1, 1]  
+  task_wEval:   [1, 1, 1, 1, 1, 1, 1]
+  task_wTrain:  [1, 1, 1, 1, 1, 1, 1]  
 
   # can be "uniform", "permute", "identity", "achievable"
   taskSet_train: "jump"
@@ -71,13 +71,13 @@ task:
 
   # set of achievable task weights
   taskSet:
-    jump: [[1,1,1,1,1]]
-    run:  [[0,1,1,0,1]]
+    jump: [[0,0,1,1,1,1,1]]
+    run:  [[1,1,0,1,1,0,1]]
 
 
 feature:
   verbose: True
-  features: ["jump", "alive", "up", "jump_deviation", "costs", "return"]
+  features: ["x_run", "heading", "jump", "alive", "up", "jump_deviation", "costs", "return"]
 
 
 sim:
