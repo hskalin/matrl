@@ -424,7 +424,7 @@ class AntFeature(FeatureAbstract):
 
         self.verbose = self.feature_cfg.get("verbose", False)
 
-        self.dim = 7
+        self.dim = 5
         if self.verbose:
             print("[Feature] dim", self.dim)
 
@@ -459,7 +459,7 @@ class AntFeature(FeatureAbstract):
             self.termination_height,
             self.death_cost,
             self.heading_weight,
-            self.dim
+            5, #self.dim
         )
         
         return features
@@ -512,8 +512,8 @@ def compute_ant_features(
     features = torch.cat(
         (
             jump_reward.unsqueeze(-1),
-            x_run_reward.unsqueeze(-1),
-            heading_reward.unsqueeze(-1),
+            # x_run_reward.unsqueeze(-1),
+            # heading_reward.unsqueeze(-1),
             alive_reward.unsqueeze(-1),
             up_reward.unsqueeze(-1),
             -jump_deviation.unsqueeze(-1),
