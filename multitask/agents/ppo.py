@@ -81,6 +81,7 @@ class PPO_agent:
             env_cfg=self.env_cfg, device=self.device
         )
         assert self.feature.dim == self.task.dim, "feature and task dimension mismatch"
+        self.feature_names = self.env_cfg["feature"]["features"]
 
         # logging
         self.loggingEnabled = self.env_cfg.get("log_results", False)
@@ -107,7 +108,7 @@ class PPO_agent:
             self.agent.parameters(), lr=self.agent_cfg["learning_rate"], eps=1e-5
         )
 
-        self.game_rewards = AverageMeter(len(self.env.log_rewards), max_size=100).to(
+        self.game_rewards = AverageMeter(self.feature.dim+1, max_size=100).to(
             "cuda:0"
         )
         self.game_lengths = AverageMeter(1, max_size=100).to("cuda:0")
@@ -139,6 +140,7 @@ class PPO_agent:
         self.advantages = torch.zeros_like(self.rewards, dtype=torch.float).to(
             self.device
         )
+        self.returns = torch.zeros((self.env_cfg["num_envs"], self.feature.dim+1), device=self.device)
 
     def update(self):
         raise NotImplemented
@@ -146,6 +148,9 @@ class PPO_agent:
     def calc_reward(self, s, w):
         f = self.feature.extract(s)
         r = torch.sum(w * f, 1) * self.feature.dim
+
+        self.returns[:,:self.feature.dim] += f
+        self.returns[:,-1] += r
         return r
 
     def run(self):
@@ -185,40 +190,28 @@ class PPO_agent:
 
                 # TRY NOT TO MODIFY: execute the game and log data.
 
-                # next_obs, rewards[step], next_done, info = envs.step(action)
-
                 self.env.step(action)
-                next_obs, rews, next_done, episodeLen, episodeRet = (
+                next_obs, next_done, episodeLen = (
                     self.env.obs_buf,
-                    self.env.reward_buf,
                     self.env.reset_buf.clone(),
                     self.env.progress_buf.clone(),
-                    self.env.return_buf.clone(),
                 )
                 self.rewards[step] = self.calc_reward(next_obs, self.task.Train.W)
-                # self.rewards[step] = rews
                 self.env.reset()
 
                 done_ids = next_done.nonzero(as_tuple=False).squeeze(-1)
                 if done_ids.size()[0]:
                     # taking mean over all envs that are done at the
                     # current timestep
-                    # episodic_return = torch.mean(episodeRet[done_ids].float()).item()
-                    # episodic_length = torch.mean(episodeLen[done_ids].float()).item()
-
-                    self.game_rewards.update(episodeRet[done_ids])
+                    self.game_rewards.update(self.returns[done_ids])
                     self.game_lengths.update(episodeLen[done_ids])
 
                     episodic_length = self.game_lengths.get_mean()
                     episodic_returns = self.game_rewards.get_mean()
 
-                    # print(
-                    #     f"global_step={global_step}, episodic_return={episodic_return}"
-                    # )
-
                     if self.loggingEnabled:
                         wandb_metrics.update({"episode_lengths/step": episodic_length})
-                        for i, name in enumerate(self.env.log_rewards):
+                        for i, name in enumerate(self.feature_names):
                             wandb_metrics.update(
                                 {f"episodic_{name}": episodic_returns[i]}
                             )
@@ -228,15 +221,15 @@ class PPO_agent:
 
                         self.writer.add_scalar(
                             "time/return",
-                            episodic_returns[0],
+                            episodic_returns[-1],
                             time.time() - start_time,
                         )
                         self.writer.add_scalar(
                             "step/episode_lengths", episodic_length, global_step
                         )
-                        self.writer.add_scalar(
-                            "diff/reward", torch.norm(self.rewards[step]-rews,2).item(), global_step
-                        )
+
+                #resetting 
+                self.returns[done_ids] = 0
 
             # bootstrap value if not done
             with torch.no_grad():

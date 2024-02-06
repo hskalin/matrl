@@ -424,7 +424,7 @@ class AntFeature(FeatureAbstract):
 
         self.verbose = self.feature_cfg.get("verbose", False)
 
-        self.dim = 5
+        self.dim = 7
         if self.verbose:
             print("[Feature] dim", self.dim)
 
@@ -439,6 +439,7 @@ class AntFeature(FeatureAbstract):
         self.joints_at_limit_cost_scale = self.env_cfg["jointsAtLimitCost"]
         self.death_cost = self.env_cfg["deathCost"]
         self.termination_height = self.env_cfg["terminationHeight"]
+        self.heading_weight = self.env_cfg["headingWeight"]
 
         # indices
         self.slice_pos_actions = slice(52, 52 + 8)
@@ -449,7 +450,7 @@ class AntFeature(FeatureAbstract):
         self.pos_z = 0
 
     def extract(self, s):
-        features = compute_ant_jump_reward(
+        features = compute_ant_features(
             s,
             self.up_weight,
             self.actions_cost_scale,
@@ -457,13 +458,14 @@ class AntFeature(FeatureAbstract):
             self.joints_at_limit_cost_scale,
             self.termination_height,
             self.death_cost,
+            self.heading_weight,
             self.dim
         )
         
         return features
 
 @torch.jit.script
-def compute_ant_jump_reward(
+def compute_ant_features(
     obs_buf,
     up_weight,
     actions_cost_scale,
@@ -471,9 +473,18 @@ def compute_ant_jump_reward(
     joints_at_limit_cost_scale,
     termination_height,
     death_cost,
+    heading_weight,
     scale,
 ):
-    # type: (Tensor, float, float, float, float, float, float, float) -> Tensor
+    # type: (Tensor, float, float, float, float, float, float, float, float) -> Tensor
+
+    # reward from direction headed
+    heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
+    heading_reward = torch.where(
+        obs_buf[:, 11] > 0.8,
+        heading_weight_tensor,
+        heading_weight * obs_buf[:, 11] / 0.8,
+    )
 
     # aligning up axis of ant and environment
     up_reward = torch.zeros_like(obs_buf[:, 11])
@@ -486,7 +497,7 @@ def compute_ant_jump_reward(
 
     # reward for duration of staying alive
     alive_reward = torch.ones_like(up_reward) * 0.5
-    progress_reward = torch.where(
+    jump_reward = torch.where(
         obs_buf[:, 0] > 0.8,
         torch.ones_like(up_reward) * 2,
         -torch.zeros_like(up_reward) * 0.5,
@@ -496,9 +507,13 @@ def compute_ant_jump_reward(
         torch.norm(obs_buf[:,60:62], p=2, dim=-1) * 0.5
     )
 
+    x_run_reward = obs_buf[:,62]
+
     features = torch.cat(
         (
-            progress_reward.unsqueeze(-1),
+            jump_reward.unsqueeze(-1),
+            x_run_reward.unsqueeze(-1),
+            heading_reward.unsqueeze(-1),
             alive_reward.unsqueeze(-1),
             up_reward.unsqueeze(-1),
             -jump_deviation.unsqueeze(-1),

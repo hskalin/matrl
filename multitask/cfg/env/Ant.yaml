@@ -57,31 +57,27 @@ task:
   proximity_threshold: 3
 
   # targets for play
-  target_pos:       [0.0, 0.0, 1000.0] # x, y
+  target_pos:       [0.0, 0.0, 0.0] # x, y
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
-  task_wEval:   [1, 1, 1, 1, 1]
-  task_wTrain:  [1, 1, 1, 1, 1]  
+  task_wEval:   [1, 1, 1, 1, 1, 1, 1]
+  task_wTrain:  [1, 1, 1, 1, 1, 1, 1]  
 
   # can be "uniform", "permute", "identity", "achievable"
-  taskSet_train: "achievable"
-  taskSet_eval: "achievable"
+  taskSet_train: "jump"
+  taskSet_eval: "jump"
   adaptive_task: True
 
   # set of achievable task weights
   taskSet:
-    achievable: [[1,1,1,1,1],
-                 [1,1,1,1,1],
-                 [1,1,1,1,1]]
+    jump: [[1,0,0,1,1,1,1]]
+    run:  [[0,1,1,1,1,0,1]]
 
-  # for PPO/single task training and logging
-  single_task: "jump"
-  log_rewards_dict: {"jump" : ["return", "progress", "up", "jump_deviation"],
-                     "run" : ["return", "progress", "up", "heading"]}
 
 feature:
   verbose: True
+  features: ["jump", "x_run", "heading", "alive", "up", "jump_deviation", "costs", "return"]
 
 
 sim:
