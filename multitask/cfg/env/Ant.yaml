@@ -57,7 +57,7 @@ task:
   proximity_threshold: 3
 
   # targets for play
-  target_pos:       [0.0, 0.0, 0.0] # x, y
+  target_pos:       [1.0, 1.0, 0.0] # x, y
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
@@ -71,13 +71,22 @@ task:
 
   # set of achievable task weights
   taskSet:
-    jump: [[0,0,1,1,1,1,1]]
-    run:  [[1,1,0,1,1,0,1]]
+    # single task sets
+    jump:   [[0,0,1,1,1,1,1]]
+    runx:   [[1,0,0,0,1,1,1]]
+    runy:   [[0,1,0,0,1,1,1]]
+
+    # eval set consists of single tasks 
+    eval: [
+           [0,0,1,1,1,1,1],     # jump
+           [1,0,0,0,1,1,1],     # x run
+           [0,1,0,0,1,1,1],     # y run
+          ]
 
 
 feature:
   verbose: True
-  features: ["x_run", "heading", "jump", "alive", "up", "jump_deviation", "costs", "return"]
+  features: ["x_run", "y_run", "jump", "jump_deviation", "alive", "up", "costs", "return"]
 
 
 sim:

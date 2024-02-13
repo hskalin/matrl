@@ -480,10 +480,15 @@ def compute_ant_features(
 
     # reward from direction headed
     heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
-    heading_reward = torch.where(
+    heading_reward_x = torch.where(
         obs_buf[:, 11] > 0.8,
         heading_weight_tensor,
         heading_weight * obs_buf[:, 11] / 0.8,
+    )
+    heading_reward_y = torch.where(
+        obs_buf[:, 64] > 0.8,
+        heading_weight_tensor,
+        heading_weight * obs_buf[:, 64] / 0.8,
     )
 
     # aligning up axis of ant and environment
@@ -500,7 +505,7 @@ def compute_ant_features(
     jump_reward = torch.where(
         obs_buf[:, 0] > 0.8,
         torch.ones_like(up_reward) * 2,
-        -torch.zeros_like(up_reward) * 0.5,
+        torch.zeros_like(up_reward),
     )
 
     jump_deviation = (
@@ -508,15 +513,22 @@ def compute_ant_features(
     )
 
     x_run_reward = obs_buf[:,62]
+    y_run_reward = obs_buf[:,63]
 
     features = torch.cat(
         ( 
-            x_run_reward.unsqueeze(-1),
-            heading_reward.unsqueeze(-1),
+            (
+                x_run_reward +
+                heading_reward_x
+            ).unsqueeze(-1),
+            (
+                y_run_reward +
+                heading_reward_y
+            ).unsqueeze(-1),
             jump_reward.unsqueeze(-1),
+            -jump_deviation.unsqueeze(-1),
             alive_reward.unsqueeze(-1),
             up_reward.unsqueeze(-1),
-            -jump_deviation.unsqueeze(-1),
             (
                 - actions_cost_scale * actions_cost
                 - energy_cost_scale * electricity_cost

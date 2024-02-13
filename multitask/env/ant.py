@@ -69,7 +69,7 @@ class Ant(VecEnv):
         self.plane_restitution = cfg["plane"]["restitution"]
         self.up_axis_idx = 2
 
-        self.num_obs = 60 + 2 + 1
+        self.num_obs = 60 + 2 + 1 + 1 + 1
         self.num_act = 8
 
         super().__init__(cfg=cfg)
@@ -134,22 +134,12 @@ class Ant(VecEnv):
             get_axis_params(1.0, self.up_axis_idx), device=self.device
         ).repeat((self.num_envs, 1))
 
-        # goal_vec = torch.tensor(cfg["task"]["target_pos"])
-        # self.heading_vec = to_torch(
-        #     goal_vec / goal_vec.norm(p=2, keepdim=True), device=self.device
-        # ).repeat((self.num_envs, 1))
-        # self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
-        #     (self.num_envs, 1)
-        # )
 
-        # self.basis_vec0 = self.heading_vec.clone()
-        # self.basis_vec1 = self.up_vec.clone()
 
-        # self.targets = to_torch(goal_vec, device=self.device).repeat((self.num_envs, 1))
-
-        self.heading_vec = to_torch([1, 0, 0], device=self.device).repeat(
-            (self.num_envs, 1)
-        )
+        goal_vec = torch.tensor(cfg["task"]["target_pos"])
+        self.heading_vec = to_torch(
+            goal_vec / goal_vec.norm(p=2, keepdim=True), device=self.device
+        ).repeat((self.num_envs, 1))
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat(
             (self.num_envs, 1)
         )
@@ -157,16 +147,14 @@ class Ant(VecEnv):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
-        self.targets = to_torch([2000, 0, 0], device=self.device).repeat(
-            (self.num_envs, 1)
-        )
-        # self.target_dirs = to_torch([1, 0, 0], device=self.device).repeat(
-        #     (self.num_envs, 1)
-        # )
+        self.target_scale = 2000
+        self.targets = to_torch(goal_vec * self.target_scale, device=self.device).repeat((self.num_envs, 1))
+
         self.dt = cfg["sim"]["dt"]
-        self.potentials = to_torch([-1000.0 / self.dt], device=self.device).repeat(
-            self.num_envs
-        )
+        # self.potentials = to_torch([-1000.0 / self.dt, -1000.0 / self.dt], device=self.device).repeat(
+        #     self.num_envs
+        # )
+        self.potentials = torch.ones((self.num_envs, 2), device=self.device) * (-1000.0 / self.dt)
         self.prev_potentials = self.potentials.clone()
 
         self.actions = torch.zeros(
@@ -333,28 +321,6 @@ class Ant(VecEnv):
             self.initial_root_states,
             self.root_states,
         )
-        # elif self.single_task == "run":
-        #     (
-        #         self.reward_buf[:],
-        #         self.reset_buf[:],
-        #         self.return_buf[:],
-        #     ) = compute_ant_run_reward(
-        #         self.obs_buf,
-        #         self.reset_buf,
-        #         self.progress_buf,
-        #         self.actions,
-        #         self.up_weight,
-        #         self.heading_weight,
-        #         self.potentials,
-        #         self.prev_potentials,
-        #         self.actions_cost_scale,
-        #         self.energy_cost_scale,
-        #         self.joints_at_limit_cost_scale,
-        #         self.termination_height,
-        #         self.death_cost,
-        #         self.max_episode_length,
-        #         self.return_buf,
-        #     )
 
     def reset(self):
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -396,7 +362,7 @@ class Ant(VecEnv):
 
         to_target = self.targets[env_ids] - self.initial_root_states[env_ids, 0:3]
         to_target[:, 2] = 0.0
-        self.prev_potentials[env_ids] = -torch.norm(to_target, p=2, dim=-1) / self.dt
+        self.prev_potentials[env_ids] = -torch.abs(to_target)[:,:2] / self.dt
         self.potentials[env_ids] = self.prev_potentials[env_ids].clone()
 
         self.progress_buf[env_ids] = 0
@@ -433,19 +399,28 @@ class Ant(VecEnv):
 def compute_heading_and_up(
     torso_rotation, inv_start_rot, to_target, vec0, vec1, up_idx
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, int) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, int) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
     num_envs = torso_rotation.shape[0]
     target_dirs = normalize(to_target)
+
+    target_dirs_x = target_dirs.clone()
+    target_dirs_y = target_dirs.clone()
+
+    target_dirs_x[:, 1:3]   = 0.0
+    target_dirs_y[:, [0,2]] = 0.0
 
     torso_quat = quat_mul(torso_rotation, inv_start_rot)
     up_vec = get_basis_vector(torso_quat, vec1).view(num_envs, 3)
     heading_vec = get_basis_vector(torso_quat, vec0).view(num_envs, 3)
     up_proj = up_vec[:, up_idx]
-    heading_proj = torch.bmm(
-        heading_vec.view(num_envs, 1, 3), target_dirs.view(num_envs, 3, 1)
+    heading_proj_x = torch.bmm(
+        heading_vec.view(num_envs, 1, 3), target_dirs_x.view(num_envs, 3, 1)
+    ).view(num_envs)
+    heading_proj_y = torch.bmm(
+        heading_vec.view(num_envs, 1, 3), target_dirs_y.view(num_envs, 3, 1)
     ).view(num_envs)
 
-    return torso_quat, up_proj, heading_proj, up_vec, heading_vec
+    return torso_quat, up_proj, heading_proj_x, heading_proj_y, up_vec, heading_vec
 
 
 @torch.jit.script
@@ -494,74 +469,6 @@ def compute_bufs_to_reset(
     return reset, initial_root_states
 
 
-@torch.jit.script
-def compute_ant_run_reward(
-    obs_buf,
-    reset_buf,
-    progress_buf,
-    actions,
-    up_weight,
-    heading_weight,
-    potentials,
-    prev_potentials,
-    actions_cost_scale,
-    energy_cost_scale,
-    joints_at_limit_cost_scale,
-    termination_height,
-    death_cost,
-    max_episode_length,
-):
-    # type: (Tensor, Tensor, Tensor, Tensor, float, float, Tensor, Tensor, float, float, float, float, float, float) -> Tuple[Tensor, Tensor]
-
-    # reward from direction headed
-    heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
-    heading_reward = torch.where(
-        obs_buf[:, 11] > 0.8,
-        heading_weight_tensor,
-        heading_weight * obs_buf[:, 11] / 0.8,
-    )
-
-    # aligning up axis of ant and environment
-    up_reward = torch.zeros_like(obs_buf[:, 11])
-    up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
-
-    # energy penalty for movement
-    actions_cost = torch.sum(actions**2, dim=-1)
-    electricity_cost = torch.sum(torch.abs(actions * obs_buf[:, 20:28]), dim=-1)
-    dof_at_limit_cost = torch.sum(obs_buf[:, 12:20] > 0.99, dim=-1)
-
-    # reward for duration of staying alive
-    alive_reward = torch.ones_like(potentials) * 0.5
-    progress_reward = potentials - prev_potentials
-
-    total_reward = (
-        progress_reward
-        + alive_reward
-        + up_reward
-        + heading_reward
-        - actions_cost_scale * actions_cost
-        - energy_cost_scale * electricity_cost
-        - dof_at_limit_cost * joints_at_limit_cost_scale
-    )
-
-    # adjust reward for fallen agents
-    total_reward = torch.where(
-        obs_buf[:, 0] < termination_height,
-        torch.ones_like(total_reward) * death_cost,
-        total_reward,
-    )
-
-    # reset agents
-    reset = torch.where(
-        obs_buf[:, 0] < termination_height, torch.ones_like(reset_buf), reset_buf
-    )
-    reset = torch.where(
-        progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset
-    )
-
-    return total_reward, reset
-
-
 # @torch.jit.script
 def compute_ant_observations(
     obs_buf,
@@ -594,9 +501,9 @@ def compute_ant_observations(
     to_target[:, 2] = 0.0
 
     prev_potentials_new = potentials.clone()
-    potentials = -torch.norm(to_target, p=2, dim=-1) / dt
+    potentials = -torch.abs(to_target)[:,:2] / dt
 
-    torso_quat, up_proj, heading_proj, up_vec, heading_vec = compute_heading_and_up(
+    torso_quat, up_proj, heading_proj_x, heading_proj_y, up_vec, heading_vec = compute_heading_and_up(
         torso_rotation, inv_start_rot, to_target, basis_vec0, basis_vec1, 2
     )
 
@@ -606,7 +513,7 @@ def compute_ant_observations(
 
     dof_pos_scaled = unscale(dof_pos, dof_limits_lower, dof_limits_upper)
 
-    # obs_buf shapes: 1, 3, 3, 1, 1, 1, 1, 1, num_dofs(8), num_dofs(8), 24, num_dofs(8), 2, 1
+    # obs_buf shapes: 1, 3, 3, 1, 1, 1, 1, 1, num_dofs(8), num_dofs(8), 24, num_dofs(8), 2, 1, 1, 1
     obs = torch.cat(
         (
             torso_position[:, up_axis_idx].view(-1, 1),
@@ -616,13 +523,15 @@ def compute_ant_observations(
             roll.unsqueeze(-1),
             angle_to_target.unsqueeze(-1),
             up_proj.unsqueeze(-1),
-            heading_proj.unsqueeze(-1),
+            heading_proj_x.unsqueeze(-1),
             dof_pos_scaled,
             dof_vel * dof_vel_scale,
             sensor_force_torques.view(-1, 24) * contact_force_scale,
             actions,
             initial_root_states[:, :2] - torso_position[:, :2],
-            (potentials - prev_potentials_new).unsqueeze(-1),
+            (potentials[:,0] - prev_potentials_new[:,0]).unsqueeze(-1),
+            (potentials[:,1] - prev_potentials_new[:,1]).unsqueeze(-1),
+            heading_proj_x.unsqueeze(-1),
         ),
         dim=-1,
     )
