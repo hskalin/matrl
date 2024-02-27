@@ -21,6 +21,10 @@ jointsAtLimitCost: 0.1
 deathCost: -2.0
 terminationHeight: 0.31
 
+# barrier reward factors
+A: 0.005
+B: 8.0
+
 plane:
   staticFriction: 1.0
   dynamicFriction: 1.0
@@ -44,7 +48,7 @@ eval: True
 eval_interval: 2
 eval_episodes: 1
 save_model: False  # save model after evaluation
-log_results: False
+log_results: True
 render: False  # render env
 record: False  # dump config, record video only works if env is rendered
 log_path: "logs/"  # config, video, model log path

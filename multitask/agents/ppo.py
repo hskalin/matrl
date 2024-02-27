@@ -210,10 +210,10 @@ class PPO_agent:
                     episodic_returns = self.game_rewards.get_mean()
 
                     if self.loggingEnabled:
-                        wandb_metrics.update({"episode_lengths/step": episodic_length})
+                        wandb_metrics.update({"train/episodic_lengths": episodic_length})
                         for i, name in enumerate(self.feature_names):
                             wandb_metrics.update(
-                                {f"episodic_{name}": episodic_returns[i]}
+                                {f"train/episodic_{name}": episodic_returns[i]}
                             )
                             self.writer.add_scalar(
                                 f"step/{name}", episodic_returns[i], global_step
@@ -370,6 +370,7 @@ class PPO_agent:
                 wandb_metrics.update(
                     {
                         "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
+                        "charts/SPS": int(global_step / (time.time() - start_time)),
                         "losses/value_loss": v_loss.item(),
                         "losses/entropy": entropy_loss.item(),
                         "losses/old_approx_kl": old_approx_kl.item(),

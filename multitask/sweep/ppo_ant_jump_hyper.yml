@@ -1,0 +1,29 @@
+program: run.py
+method: bayes
+metric:
+  goal: maximize
+  name: train/episodic_jump
+
+parameters:
+  agent.learning_rate:
+    min: 0.00005
+    max: 0.005
+  env.num_envs:
+    values: [2048]
+  env.A:
+    min: 0.001
+    max: 0.1
+  env.B:
+    min: 1.0
+    max: 10.0
+  env.task.taskSet_train:
+    values: ["jump"] # "redundant"
+  env.task.taskSet_eval:
+    values: ["jump"]
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - agent=PPO
+  - env=Ant

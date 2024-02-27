@@ -441,6 +441,9 @@ class AntFeature(FeatureAbstract):
         self.termination_height = self.env_cfg["terminationHeight"]
         self.heading_weight = self.env_cfg["headingWeight"]
 
+        self.A = self.env_cfg["A"]
+        self.B = self.env_cfg["B"]
+
         # indices
         self.slice_pos_actions = slice(52, 52 + 8)
         self.slice_pos_dof_velocity = slice(20, 20 + 8)
@@ -460,6 +463,8 @@ class AntFeature(FeatureAbstract):
             self.death_cost,
             self.heading_weight,
             self.dim,
+            self.A,
+            self.B,
         )
         
         return features
@@ -475,8 +480,10 @@ def compute_ant_features(
     death_cost,
     heading_weight,
     scale,
+    A,
+    B,
 ):
-    # type: (Tensor, float, float, float, float, float, float, float, float) -> Tensor
+    # type: (Tensor, float, float, float, float, float, float, float, float, float, float) -> Tensor
 
     # reward from direction headed
     heading_weight_tensor = torch.ones_like(obs_buf[:, 11]) * heading_weight
@@ -515,8 +522,6 @@ def compute_ant_features(
     x_run_reward = obs_buf[:,62]
     y_run_reward = obs_buf[:,63]
 
-    A = 0.01
-    B = 8
     l = -1
     h = 1
     bf = A * (1 - (torch.exp(B * (obs_buf[:, 12:12+8] - h)) + torch.exp(B * (l - obs_buf[:, 12:12+8]))))
