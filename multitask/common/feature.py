@@ -424,7 +424,7 @@ class AntFeature(FeatureAbstract):
 
         self.verbose = self.feature_cfg.get("verbose", False)
 
-        self.dim = 7
+        self.dim = 8
         if self.verbose:
             print("[Feature] dim", self.dim)
 
@@ -515,6 +515,13 @@ def compute_ant_features(
     x_run_reward = obs_buf[:,62]
     y_run_reward = obs_buf[:,63]
 
+    A = 0.01
+    B = 8
+    l = -1
+    h = 1
+    bf = A * (1 - (torch.exp(B * (obs_buf[:, 12:12+8] - h)) + torch.exp(B * (l - obs_buf[:, 12:12+8]))))
+    rew_bf = torch.sum(bf, dim=1)
+
     features = torch.cat(
         ( 
             (
@@ -533,7 +540,8 @@ def compute_ant_features(
                 - actions_cost_scale * actions_cost
                 - energy_cost_scale * electricity_cost
                 - dof_at_limit_cost * joints_at_limit_cost_scale
-            ).unsqueeze(-1)
+            ).unsqueeze(-1),
+            rew_bf.unsqueeze(-1),
         ),
         1,
     )

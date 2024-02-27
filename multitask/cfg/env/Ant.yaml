@@ -61,32 +61,32 @@ task:
   # target_vel:       [0, 0, 0] # vx, vy, vz
 
   # |p|, v, |v|, prox
-  task_wEval:   [1, 1, 1, 1, 1, 1, 1]
-  task_wTrain:  [1, 1, 1, 1, 1, 1, 1]  
+  task_wEval:   [1, 1, 1, 1, 1, 1, 1, 1]
+  task_wTrain:  [1, 1, 1, 1, 1, 1, 1, 1]  
 
   # can be "uniform", "permute", "identity", "achievable"
-  taskSet_train: "runy"
-  taskSet_eval: "runy"
+  taskSet_train: "jump"
+  taskSet_eval: "jump"
   adaptive_task: True
 
   # set of achievable task weights
   taskSet:
     # single task sets
-    jump:   [[0,0,1,1,1,1,1]]
-    runx:   [[1,0,0,0,1,1,1]]
-    runy:   [[0,1,0,0,1,1,1]]
+    jump:   [[0,0,1,1,1,1,1,1]]
+    runx:   [[1,0,0,0,1,1,1,1]]
+    runy:   [[0,1,0,0,1,1,1,1]]
 
     # eval set consists of single tasks 
     eval: [
-           [0,0,1,1,1,1,1],     # jump
-           [1,0,0,0,1,1,1],     # x run
-           [0,1,0,0,1,1,1],     # y run
+           [0,0,1,1,1,1,1,1],     # jump
+           [1,0,0,0,1,1,1,1],     # x run
+           [0,1,0,0,1,1,1,1],     # y run
           ]
 
 
 feature:
   verbose: True
-  features: ["x_run", "y_run", "jump", "jump_deviation", "alive", "up", "costs", "return"]
+  features: ["x_run", "y_run", "jump", "jump_deviation", "alive", "up", "costs", "barrier", "return"]
 
 
 sim:
