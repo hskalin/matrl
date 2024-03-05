@@ -232,7 +232,11 @@ class CompAgent(MultitaskAgent):
             self.lat_ra = self.env_cfg["task"]["range_a"]
             self.lat_rb = self.env_cfg["task"]["range_b"]
 
-        self.idx_trig = 7
+        # for logging
+        self.feature_names = self.env_cfg["feature"]["features"]
+
+        # store returns for logging
+        self.returns = torch.zeros((self.env_cfg["num_envs"], self.feature.dim+1), device=self.device)
 
     def run(self):
         grad_true(self.sf)
@@ -282,8 +286,10 @@ class CompAgent(MultitaskAgent):
 
     def train_episode(self, gui_app=None, gui_rew=None):
         self.episodes += 1
-        episode_r = episode_steps = trigger_wp = hover_time = 0
+        episode_steps = 0
         done = False
+
+        episode_r  = 0
 
         print("episode = ", self.episodes)
         self.task.rand_task(self.episodes)
@@ -294,17 +300,19 @@ class CompAgent(MultitaskAgent):
 
             s_next, r, done = self.step(episode_steps, s)
 
-            s = s_next
-            self.steps += self.n_env
-            trigger_wp += s[:, self.idx_trig].sum()
-            hover_time += (torch.norm(s[:, 8 : 8 + 3], dim=1) < 7).sum()
-            episode_steps += 1
             episode_r += r
 
+            s = s_next
+            self.steps += self.n_env
+            episode_steps += 1
+            
             done_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if done_ids.size()[0]:
-                self.game_rewards.update(episode_r[done_ids])
+                self.game_rewards.update(self.returns[done_ids])
                 self.game_lengths.update(episodeLen[done_ids])
+
+            # resetting
+            self.returns[done_ids] = 0
 
             # call gui update loop
             if gui_app:
@@ -316,24 +324,24 @@ class CompAgent(MultitaskAgent):
             if episode_steps >= self.episode_max_step:
                 break
 
+        # TODO
         task_return = self.task.trainTaskR(episode_r)
 
         if self.adaptive_task:
             self.task.adapt_task()
 
-        metrics = trigger_wp + hover_time / 100
-        wandb.log(
-            {
-                f"reward/train": self.game_rewards.get_mean(),
-                f"reward/episode_length": self.game_lengths.get_mean(),
-                f"reward/ntriggers": trigger_wp.detach().item(),
-                f"reward/hovertime": hover_time.detach().item(),
-                f"reward/metrics": metrics.detach().item(),
-            }
-        )
+        episodic_returns = self.game_rewards.get_mean()
+        wandb_metrics = {"train/episodic_lengths": self.game_lengths.get_mean()}
+        for i, name in enumerate(self.feature_names):
+            wandb_metrics.update(
+                {f"train/episodic_{name}": episodic_returns[i]}
+            )
+        wandb.log(wandb_metrics)
+
         if self.curriculum:
             wandb.log({"reward/curriculum_stage": self.curri_stage})
 
+        # TODO
         if self.wandb_verbose:
             task_return = task_return.detach().tolist()
             for i in range(len(task_return)):
@@ -343,7 +351,7 @@ class CompAgent(MultitaskAgent):
                     }
                 )
 
-        return episode_r, episode_steps, {}
+        return episode_steps, {}
 
     def evaluate(self):
         episodes = int(self.eval_episodes)
@@ -367,28 +375,23 @@ class CompAgent(MultitaskAgent):
                 s_next = self.env.obs_buf.clone()
                 self.env.reset()
 
-                r = self.calc_reward(s_next, self.task.Eval.W)
+                # TODO
+                r, _ = self.calc_reward(s_next, self.task.Eval.W)
 
                 s = s_next
                 episode_r += r
-                trigger_wp += s[:, self.idx_trig].sum()
-                hover_time += (torch.norm(s[:, 8 : 8 + 3], dim=1) < 7).sum()
 
             returns[i] = torch.mean(episode_r).item()
 
-        metrics = trigger_wp + hover_time / 100
-
         print(
-            f"eval episode {self.episodes}: ntrigger {trigger_wp}, hover_time {hover_time},  metrics {metrics}"
+            f"eval episode {self.episodes}: return {torch.mean(returns).item()}"
         )
         print(f"===== finish evaluate ====")
 
+        # TODO
         wandb.log(
             {
-                f"reward/eval": torch.mean(returns).item(),
-                f"reward/eval_ntriggers": trigger_wp.detach().item(),
-                f"reward/eval_hovertime": hover_time.detach().item(),
-                f"reward/eval_metrics": metrics.detach().item(),
+                f"eval/return": torch.mean(returns).item(),
                 f"state/eval_policy_idx": wandb.Histogram(self.comp.policy_idx),
             }
         )
@@ -423,7 +426,10 @@ class CompAgent(MultitaskAgent):
             s_next
         ).any(), f"detect anomaly state {(torch.isnan(s_next)==True).nonzero()}"
 
-        r = self.calc_reward(s_next, self.task.Train.W)
+        r, f = self.calc_reward(s_next, self.task.Train.W)
+
+        self.returns[:,:self.feature.dim] += f
+        self.returns[:,-1] += r
 
         masked_done = False if episode_steps >= self.episode_max_step else done
 

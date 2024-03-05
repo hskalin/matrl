@@ -89,7 +89,7 @@ class IsaacAgent(AbstractAgent):
         self.episodes = 0
 
         self.games_to_track = 100
-        self.game_rewards = AverageMeter(1, self.games_to_track).to(self.device)
+        self.game_rewards = AverageMeter(self.feature.dim+1, self.games_to_track).to(self.device)
         self.game_lengths = AverageMeter(1, self.games_to_track).to(self.device)
         self.avgStepRew = AverageMeter(1, 20).to(self.device)
 
@@ -267,8 +267,8 @@ class IsaacAgent(AbstractAgent):
 
     def calc_reward(self, s, w):
         f = self.feature.extract(s)
-        r = torch.sum(w * f, 1)
-        return r
+        r = torch.sum(w * f, 1) * self.feature.dim
+        return r, f
 
     def explore(self):
         raise NotImplementedError
