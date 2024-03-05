@@ -8,10 +8,13 @@ class VectorizedReplayBuffer:
         self,
         obs_shape,
         action_shape,
-        feature_shape,
         capacity,
         device,
         mini_batch_size=64,
+        add_task_ids=False,
+        add_task_weights=False,
+        task_id_dim=1,
+        task_weight_dim=13,
         *args,
         **kwargs,
     ):
@@ -28,12 +31,11 @@ class VectorizedReplayBuffer:
 
         self.device = device
         self.batch_size = mini_batch_size
+        self.add_task_ids = add_task_ids
+        self.add_task_weights = add_task_weights
 
         self.obses = torch.empty(
             (capacity, *obs_shape), dtype=torch.float32, device=self.device
-        )
-        self.features = torch.empty(
-            (capacity, *feature_shape), dtype=torch.float32, device=self.device
         )
         self.next_obses = torch.empty(
             (capacity, *obs_shape), dtype=torch.float32, device=self.device
@@ -46,6 +48,15 @@ class VectorizedReplayBuffer:
         )
         self.dones = torch.empty((capacity, 1), dtype=torch.bool, device=self.device)
 
+        if self.add_task_ids:
+            self.task_ids = torch.empty(
+                (capacity, task_id_dim), dtype=torch.float32, device=self.device
+            )
+        if self.add_task_weights:
+            self.task_weights = torch.empty(
+                (capacity, task_weight_dim), dtype=torch.float32, device=self.device
+            )
+
         self.capacity = capacity
         self.idx = 0
         self.full = False
@@ -53,22 +64,22 @@ class VectorizedReplayBuffer:
     def __len__(self):
         return self.idx
 
-    def add(self, obs, feature, action, reward, next_obs, done):
+    def add(self, obs, action, reward, next_obs, done, id=None, weight=None):
         num_observations = obs.shape[0]
         remaining_capacity = min(self.capacity - self.idx, num_observations)
         overflow = num_observations - remaining_capacity
         if remaining_capacity < num_observations:
             self.obses[0:overflow] = obs[-overflow:]
-            self.features[0:overflow] = feature[-overflow:]
             self.actions[0:overflow] = action[-overflow:]
             self.rewards[0:overflow] = reward[-overflow:]
             self.next_obses[0:overflow] = next_obs[-overflow:]
             self.dones[0:overflow] = done[-overflow:]
+            if self.add_task_ids:
+                self.task_ids[0:overflow] = id[-overflow:]
+            if self.add_task_weights:
+                self.task_weights[0:overflow] = weight[-overflow:]
             self.full = True
         self.obses[self.idx : self.idx + remaining_capacity] = obs[:remaining_capacity]
-        self.features[self.idx : self.idx + remaining_capacity] = feature[
-            :remaining_capacity
-        ]
         self.actions[self.idx : self.idx + remaining_capacity] = action[
             :remaining_capacity
         ]
@@ -80,15 +91,26 @@ class VectorizedReplayBuffer:
         ]
         self.dones[self.idx : self.idx + remaining_capacity] = done[:remaining_capacity]
 
+        if self.add_task_ids:
+            self.task_ids[self.idx : self.idx + remaining_capacity] = id[
+                :remaining_capacity
+            ]
+        if self.add_task_weights:
+            self.task_weights[self.idx : self.idx + remaining_capacity] = weight[
+                :remaining_capacity
+            ]
+
         self.idx = (self.idx + num_observations) % self.capacity
         self.full = self.full or self.idx == 0
 
-    def sample(self, batch_size=None):
+    def sample(self, batch_size=None, id=None):
         """Sample a batch of experiences.
         Parameters
         ----------
         batch_size: int
             How many transitions to sample.
+        id: int
+            If provided, only sample experience for that perticular task id
         Returns
         -------
         obses: torch tensor
@@ -113,20 +135,41 @@ class VectorizedReplayBuffer:
             (batch_size,),
             device=self.device,
         )
+        ids = None
+        if self.add_task_ids:
+            ids = self.task_ids[idxs]
+
         obses = self.obses[idxs]
-        features = self.features[idxs]
         actions = self.actions[idxs]
         rewards = self.rewards[idxs]
         next_obses = self.next_obses[idxs]
         dones = self.dones[idxs]
 
+        weights = None
+        if self.add_task_weights:
+            weights = self.task_weights[idxs]
+
+        if self.add_task_ids and id != None:
+            msk = ids == id
+
+            obses = obses[msk.squeeze(), :]
+            actions = actions[msk.squeeze(), :]
+            rewards = rewards[msk.squeeze(), :]
+            next_obses = next_obses[msk.squeeze(), :]
+            dones = dones[msk.squeeze(), :]
+            ids = ids[msk.squeeze(), :]
+
+            if self.add_task_weights:
+                weights = weights[msk.squeeze(), :]
+
         return {
             "obs": obses,
-            "feature": features,
             "action": actions,
             "reward": rewards,
             "next_obs": next_obses,
             "done": dones,
+            "ids": ids,
+            "weights": weights,
         }
 
 

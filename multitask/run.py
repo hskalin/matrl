@@ -10,38 +10,25 @@ import numpy as np
 
 import wandb
 
+
 def get_agent(cfg_dict):
     if "sac" in cfg_dict["agent"]["name"].lower():
         from agents.sac import SACAgent
 
         agent = SACAgent(cfg=cfg_dict)
-    elif "ppoh" in cfg_dict["agent"]["name"].lower():
-        from agents.ppoh import PPOHagent
 
-        agent = PPOHagent(cfg=cfg_dict)
     elif "ppo" in cfg_dict["agent"]["name"].lower():
         from agents.ppo import PPO_agent
 
         agent = PPO_agent(cfg=cfg_dict)
-    elif "composition" in cfg_dict["agent"]["name"].lower():
-        from agents.compose import CompositionAgent
-
-        agent = CompositionAgent(cfg_dict)
-    elif "pid" in cfg_dict["agent"]["name"].lower():
-        from agents.pidcontrol import BlimpPositionController
-
-        agent = BlimpPositionController(cfg_dict)
-    elif "rmacompblimp" in cfg_dict["agent"]["name"].lower():
-        from agents.compose_pid import RMACompPIDAgent
-
-        agent = RMACompPIDAgent(cfg_dict)
 
     else:
-        from agents.composeh import RMACompAgent
-
-        agent = RMACompAgent(cfg_dict)
+        raise NotImplementedError(
+            f'agent {cfg_dict["agent"]["name"].lower()} not implemented'
+        )
 
     return agent
+
 
 @hydra.main(config_name="config", config_path="./cfg")
 def launch_rlg_hydra(cfg: DictConfig):
