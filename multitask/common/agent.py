@@ -62,7 +62,7 @@ class IsaacAgent(AbstractAgent):
         self.feature_shape = [self.feature_dim]
         self.action_shape = [self.action_dim]
 
-        self.setup_replaybuffer()
+        # self.setup_replaybuffer()
         self.mini_batch_size = int(self.buffer_cfg["mini_batch_size"])
         self.min_n_experience = int(self.buffer_cfg["min_n_experience"])
 

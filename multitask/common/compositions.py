@@ -8,7 +8,15 @@ Epsilon = 1e-6
 
 class Compositions:
     def __init__(
-        self, agent_cfg, policy, sf, n_env, n_heads, action_dim, feature_dim, device
+        self,
+        agent_cfg,
+        policy,
+        sf,
+        n_env,
+        n_heads,
+        action_dim,
+        feature_dim,
+        device,
     ) -> None:
         self.policy = policy
         self.sf = sf
@@ -19,6 +27,8 @@ class Compositions:
         self.device = device
 
         self.norm_task_by_sf = agent_cfg["norm_task_by_sf"]
+        self.use_auxiliary_task = agent_cfg["use_auxiliary_task"]
+        self.n_auxTask = agent_cfg["n_auxTask"]
 
         self.record_impact = False
         self.impact_x_idx = []  # record primitive impact on x-axis
@@ -60,20 +70,23 @@ class Compositions:
         return self.composition_methods(composition)(s, w, mode)
 
     def null_comp(self, s, id):
-        acts, _, _ = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
+        acts, _, dist, _ = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
+        act_dim = acts.shape[2]
 
-        a = torch.masked_select(acts, self.mask_nullcomp[id])
-        return a.view(-1, acts.shape[2])
+        a = torch.masked_select(acts, self.mask_nullcomp[id]).view(
+            -1, act_dim
+        )  # [N, A]
+        return a, dist
 
     def sfgpi(self, s, w, mode):
         if mode == "explore":
-            acts, _, _ = self.forward_policy(s)  # [N, Ha, A]  <-- [N, S]
+            acts, _, dist, _ = self.forward_policy(s)  # [N, Ha, A]  <-- [N, S]
         elif mode == "exploit":
-            _, _, acts = self.forward_policy(s)  # [N, Ha, A]  <-- [N, S]
+            _, _, dist, acts = self.forward_policy(s)  # [N, Ha, A]  <-- [N, S]
 
         qs = self.gpe(s, acts, w)  # [N, Ha, Hsf] <-- [N, S], [N, Ha, A], [N, F]
         a = self.gpi(acts, qs)  # [N, A] <-- [N, Ha, A], [N, Ha, Hsf]
-        return a
+        return a, dist
 
     def msf(self, s, w, mode):
         means, log_stds = self.forward_policy_distribution(s)  # [N, H, A]
@@ -108,13 +121,13 @@ class Compositions:
 
     def dacgpi(self, s, w, mode):
         if mode == "explore":
-            a, _, _ = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
+            a, _, dist, _ = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
         elif mode == "exploit":
-            _, _, a = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
+            _, _, dist, a = self.forward_policy(s)  # [N, H, A]  <-- [N, S]
 
         kappa = self.cpe(s, a, w)
         a = self.gpi(a, kappa, rule="k")
-        return a
+        return a, dist
 
     def gpe(self, s, a, w):
         # [N, Ha, Hsf, F] <-- [N, S], [N, Ha, A]
@@ -122,7 +135,7 @@ class Compositions:
 
         if self.norm_task_by_sf:
             w /= curr_sf.mean([0, 1, 2]).abs()  # normalized by SF scale
-            w /= w.norm(1, 1, keepdim=True)  # [N, Ha], H=F
+            w /= w.norm(1, 1, keepdim=True) + 1e-6  # [N, Ha], H=F
 
         # [N,Ha,Hsf]<--[N,Ha,Hsf,F],[N,F]
         qs = torch.einsum("ijkl,il->ijk", curr_sf, w)
@@ -174,8 +187,8 @@ class Compositions:
         return composed_mean, composed_std
 
     def forward_policy(self, s):
-        acts, entropy, mean = self.policy.sample(s)  # [N, H, A]
-        return acts, entropy, mean
+        acts, entropy, dist, mean = self.policy.sample(s)  # [N, H, A]
+        return acts, entropy, dist, mean
 
     def forward_policy_distribution(self, s):
         means, log_stds = self.policy.get_mean_std(s)  # [N, H, A]
@@ -188,6 +201,9 @@ class Compositions:
         # [NHa, Hsf, F] <-- [NHa, S], [NHa, A]
         sf1, sf2 = sf_model(s_tiled, a_tiled)
         sf = torch.min(sf1, sf2)
+
+        if self.use_auxiliary_task:
+            sf = sf[:, : -self.n_auxTask]
 
         # [N, Ha, Hsf, F]
         sf = sf.view(-1, self.n_heads, self.n_heads, self.feature_dim)
@@ -204,7 +220,10 @@ class Compositions:
         self.sf = self.sf.eval()
 
         def func(s, a):
-            return torch.min(*self.sf(s, a))  # [NHa, Hsf, F]
+            if self.use_auxiliary_task:
+                return torch.min(*self.sf(s, a))[:, : -self.n_auxTask]  # [NHa, Hsf, F]
+            else:
+                return torch.min(*self.sf(s, a))  # [NHa, Hsf, F]
 
         j = functorch.vmap(functorch.jacrev(func, argnums=1))(s, a)  # [NHa,Hsf,F,A]
         j = j.view(-1, self.n_heads, self.n_heads, self.feature_dim, self.action_dim)

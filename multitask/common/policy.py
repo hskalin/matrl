@@ -6,9 +6,13 @@ from common.feature_extractor import TCN
 
 import torch
 import torch.nn as nn
-from functorch import combine_state_for_ensemble, vmap
 from torch.distributions import Normal
 import torch.nn.functional as F
+
+try:
+    from functorch import combine_state_for_ensemble, vmap
+except:
+    print("no functorh")
 
 
 # Initialize Policy weights
@@ -302,7 +306,13 @@ class MultiheadGaussianPolicy(BaseNetwork):
     def sample(self, obs):
         means, log_stds = self.forward(obs)  # [N, H, A], [N, H, A]
         normals, xs, actions = self._get_distribution(means, log_stds)
-        entropies = self._calc_entropy(normals, xs, actions, dim=1)  # [N, H, 1]
+        entropies = self._calc_entropy(normals, xs, actions, dim=2)  # [N, H, 1]
+        return actions, entropies, normals, means  # [N, H, A], [N, H, 1], [N, H, A]
+
+    def _sample(self, obs):
+        means, log_stds = self.forward(obs)  # [N, H, A], [N, H, A]
+        normals, xs, actions = self._get_distribution(means, log_stds)
+        entropies = self._calc_entropy(normals, xs, actions, dim=2)  # [N, H, 1]
         return actions, entropies, means  # [N, H, A], [N, H, 1], [N, H, A]
 
     def forward(self, state):

@@ -13,8 +13,10 @@ class VectorizedReplayBuffer:
         mini_batch_size=64,
         add_task_ids=False,
         add_task_weights=False,
-        task_id_dim=1,
-        task_weight_dim=13,
+        add_features=False,
+        feature_shape=None,
+        task_id_dim=None,
+        task_weight_dim=None,
         *args,
         **kwargs,
     ):
@@ -33,6 +35,7 @@ class VectorizedReplayBuffer:
         self.batch_size = mini_batch_size
         self.add_task_ids = add_task_ids
         self.add_task_weights = add_task_weights
+        self.add_features = add_features
 
         self.obses = torch.empty(
             (capacity, *obs_shape), dtype=torch.float32, device=self.device
@@ -48,6 +51,12 @@ class VectorizedReplayBuffer:
         )
         self.dones = torch.empty((capacity, 1), dtype=torch.bool, device=self.device)
 
+        if self.add_features:
+            self.features = torch.empty(
+                (capacity, feature_shape),
+                dtype=torch.float32,
+                device=self.device,
+            )
         if self.add_task_ids:
             self.task_ids = torch.empty(
                 (capacity, task_id_dim), dtype=torch.float32, device=self.device
@@ -64,7 +73,7 @@ class VectorizedReplayBuffer:
     def __len__(self):
         return self.idx
 
-    def add(self, obs, action, reward, next_obs, done, id=None, weight=None):
+    def add(self, obs, feature, action, reward, next_obs, done, id=None, weight=None):
         num_observations = obs.shape[0]
         remaining_capacity = min(self.capacity - self.idx, num_observations)
         overflow = num_observations - remaining_capacity
@@ -74,6 +83,8 @@ class VectorizedReplayBuffer:
             self.rewards[0:overflow] = reward[-overflow:]
             self.next_obses[0:overflow] = next_obs[-overflow:]
             self.dones[0:overflow] = done[-overflow:]
+            if self.add_features:
+                self.features[0:overflow] = obs[-overflow:]
             if self.add_task_ids:
                 self.task_ids[0:overflow] = id[-overflow:]
             if self.add_task_weights:
@@ -90,7 +101,10 @@ class VectorizedReplayBuffer:
             :remaining_capacity
         ]
         self.dones[self.idx : self.idx + remaining_capacity] = done[:remaining_capacity]
-
+        if self.add_features:
+            self.features[self.idx : self.idx + remaining_capacity] = feature[
+                :remaining_capacity
+            ]
         if self.add_task_ids:
             self.task_ids[self.idx : self.idx + remaining_capacity] = id[
                 :remaining_capacity
@@ -145,6 +159,10 @@ class VectorizedReplayBuffer:
         next_obses = self.next_obses[idxs]
         dones = self.dones[idxs]
 
+        features = None
+        if self.add_features:
+            features = self.features[idxs]
+
         weights = None
         if self.add_task_weights:
             weights = self.task_weights[idxs]
@@ -164,6 +182,7 @@ class VectorizedReplayBuffer:
 
         return {
             "obs": obses,
+            "feature": features,
             "action": actions,
             "reward": rewards,
             "next_obs": next_obses,

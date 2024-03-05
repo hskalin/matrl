@@ -26,22 +26,22 @@ from common.util import (
     check_samples,
 )
 from common.value import MultiheadSFNetwork
-from common.vec_buffer import FrameStackedReplayBuffer
+from common.vec_buffer import FrameStackedReplayBuffer, VectorizedReplayBuffer
 from torch.optim import Adam
 
 
-class CompPIDAgent(MultitaskAgent):
+class CompAgent(MultitaskAgent):
     def __init__(self, cfg):
         super().__init__(cfg)
 
         self.load_model = self.agent_cfg.get("load_model", False)
         self.model_path = self.agent_cfg.get("model_path", None)
 
-        self.framestacked_replay = self.buffer_cfg["framestacked_replay"]
-        self.stack_size = self.buffer_cfg["stack_size"]
-        assert (
-            self.framestacked_replay == True
-        ), "This agent only support framestacked replay"
+        self.use_framestacked_replay = self.buffer_cfg["framestacked_replay"]
+        # self.stack_size = self.buffer_cfg["stack_size"]
+        # assert (
+        #     self.use_framestacked_replay == True
+        # ), "This agent only support framestacked replay"
 
         self.lr = self.agent_cfg["lr"]
         self.policy_lr = self.agent_cfg["policy_lr"]
@@ -83,14 +83,14 @@ class CompPIDAgent(MultitaskAgent):
 
         self.wandb_verbose = self.agent_cfg.get("wandb_verbose", False)
 
-        self.env_latent_dim = self.env.num_latent  # E
-        self.env_expert_dim = self.env.num_expert  # Ex
-        self.observation_dim = (
-            self.observation_dim - self.env_latent_dim - self.env_expert_dim
-        )  # S = O-E-Ex
-        self.env_latent_idx = self.observation_dim + 1
-        self.env_expert_idx = self.env_latent_idx + self.env_latent_dim
-        self.n_expert = self.env_expert_dim // self.action_dim
+        # self.env_latent_dim = self.env.num_latent  # E
+        # self.env_expert_dim = self.env.num_expert  # Ex
+        # self.observation_dim = (
+        #     self.observation_dim - self.env_latent_dim - self.env_expert_dim
+        # )  # S = O-E-Ex
+        # self.env_latent_idx = self.observation_dim + 1
+        # self.env_expert_idx = self.env_latent_idx + self.env_latent_dim
+        # self.n_expert = self.env_expert_dim // self.action_dim
 
         # define primitive tasks
         self.w_primitive = self.task.Train.taskSet
@@ -99,14 +99,23 @@ class CompPIDAgent(MultitaskAgent):
             self.n_heads <= self.sf_net_kwargs["max_nheads"]
         ), f"number of task {self.n_heads} exceed the maximum"
 
-        self.replay_buffer = FrameStackedReplayBuffer(
-            obs_shape=self.observation_shape,
-            action_shape=self.action_shape,
-            feature_shape=self.feature_shape,
-            n_heads=self.n_heads,
-            device=self.device,
-            **self.buffer_cfg,
-        )
+        if self.use_framestacked_replay:
+            self.replay_buffer = FrameStackedReplayBuffer(
+                obs_shape=self.observation_shape,
+                action_shape=self.action_shape,
+                feature_shape=self.feature_shape,
+                n_heads=self.n_heads,
+                device=self.device,
+                **self.buffer_cfg,
+            )
+        else:
+            self.replay_buffer = VectorizedReplayBuffer(
+                obs_shape=self.observation_shape,
+                action_shape=self.action_shape,
+                feature_shape=self.feature_shape,
+                device=self.device,
+                **self.buffer_cfg,
+            )
 
         # define models
         if self.use_auxiliary_task:
@@ -472,19 +481,19 @@ class CompPIDAgent(MultitaskAgent):
         return a
 
     def parse_state(self, s):
-        if s.shape[1] >= self.env_latent_idx:
-            # parse state and env_latent if env_latent is included in the observation
-            # [N, S], [N,E], [N,Ex]
-            s, e, ex = (
-                s[:, : self.env_latent_idx - 1],
-                s[:, self.env_latent_idx - 1 : self.env_expert_idx - 1],
-                s[:, self.env_expert_idx - 1 :],
-            )
-        else:
-            e = None
-            ex = None
+        # if s.shape[1] >= self.env_latent_idx:
+        #     # parse state and env_latent if env_latent is included in the observation
+        #     # [N, S], [N,E], [N,Ex]
+        #     s, e, ex = (
+        #         s[:, : self.env_latent_idx - 1],
+        #         s[:, self.env_latent_idx - 1 : self.env_expert_idx - 1],
+        #         s[:, self.env_expert_idx - 1 :],
+        #     )
+        # else:
+        #     e = None
+        #     ex = None
 
-        return s, e, ex
+        return s, None, None
 
     def reset_env(self):
         self.comp.reset()
@@ -617,8 +626,9 @@ class CompPIDAgent(MultitaskAgent):
         return sf_loss.detach().item(), info
 
     def update_policy(self, batch):
-        s_stack, a_stack = batch["stacked_obs"], batch["stacked_act"]
-        s, e, ex = self.parse_state(s_stack[:, :, 0])  # [N, S], [N, E], [N, Ex]
+        # s_stack, a_stack = batch["stacked_obs"], batch["stacked_act"]
+        # s, _, _ = self.parse_state(s_stack[:, :, 0])  # [N, S], [N, E], [N, Ex]
+        s, _, _ = self.parse_state(batch["obs"])
 
         # [N,H,A], [N, H, 1] <-- [N,S+Z]
         a_heads, entropies, dist, _ = self.policy.sample(s)

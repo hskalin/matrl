@@ -22,6 +22,11 @@ def get_agent(cfg_dict):
 
         agent = PPO_agent(cfg=cfg_dict)
 
+    elif "comp" in cfg_dict["agent"]["name"].lower():
+        from agents.compose import CompAgent
+
+        agent = CompAgent(cfg=cfg_dict)
+
     else:
         raise NotImplementedError(
             f'agent {cfg_dict["agent"]["name"].lower()} not implemented'
