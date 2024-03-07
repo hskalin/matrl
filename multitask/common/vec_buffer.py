@@ -180,6 +180,9 @@ class VectorizedReplayBuffer:
             if self.add_task_weights:
                 weights = weights[msk.squeeze(), :]
 
+            if self.add_features:
+                features = features[msk.squeeze(), :]
+
         return {
             "obs": obses,
             "feature": features,

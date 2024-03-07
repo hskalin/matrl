@@ -89,9 +89,16 @@ class IsaacAgent(AbstractAgent):
         self.episodes = 0
 
         self.games_to_track = 100
-        self.game_rewards = AverageMeter(self.feature.dim+1, self.games_to_track).to(self.device)
+        self.game_rewards = AverageMeter(self.feature.dim + 1, self.games_to_track).to(
+            self.device
+        )
         self.game_lengths = AverageMeter(1, self.games_to_track).to(self.device)
         self.avgStepRew = AverageMeter(1, 20).to(self.device)
+
+        # buffers
+        self.returns = torch.zeros(
+            (self.env_cfg["num_envs"], self.feature.dim + 1), device=self.device
+        )
 
     def setup_replaybuffer(self):
         if self.buffer_cfg["prioritized_replay"]:
